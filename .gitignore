@@ -1,0 +1,15 @@
+# Xcode user-specific
+**/xcuserdata/
+**/*.xcuserstate
+**/xcshareddata/WorkspaceSettings.xcsettings
+
+# macOS
+.DS_Store
+
+# Build products
+build/
+DerivedData/
+*.xcarchive
+
+# Secrets — never commit API keys
+**/Secrets.swift
