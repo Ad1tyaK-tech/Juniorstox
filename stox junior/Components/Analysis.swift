@@ -5,6 +5,7 @@ struct AnalysisRow: View {
     let title: String
     let value: String
     var info: String? = nil
+    var valueColor: Color = .white
 
     @State private var showInfo = false
 
@@ -33,7 +34,7 @@ struct AnalysisRow: View {
                 Spacer()
 
                 Text(value)
-                    .foregroundColor(.white)
+                    .foregroundColor(valueColor)
                     .fontWeight(.semibold)
             }
 

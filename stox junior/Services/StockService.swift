@@ -11,6 +11,27 @@ import Foundation
 //   l  = day low
 //   o  = day open
 //   pc = previous close
+// Alpha Vantage TIME_SERIES_DAILY response — "compact" output = last 100 trading days.
+private struct AVDailyResponse: Decodable {
+    let timeSeries: [String: AVDailyBar]
+    enum CodingKeys: String, CodingKey {
+        case timeSeries = "Time Series (Daily)"
+    }
+}
+
+private struct AVDailyBar: Decodable {
+    let close: String
+    enum CodingKeys: String, CodingKey {
+        case close = "4. close"
+    }
+}
+
+// Persisted to UserDefaults so the candle endpoint is only hit once per calendar day.
+private struct AnalysisCache: Codable {
+    let dateString: String    // "yyyy-MM-dd"
+    let closePrices: [Double]
+}
+
 private struct FinnhubQuote: Decodable {
     let c: Double
     let d: Double?
@@ -99,6 +120,58 @@ struct StockService {
             floor: quote.pc
         )
     }
+
+    // Returns 90-day analysis for a ticker.
+    // Checks UserDefaults first — if today's data is already cached the network is skipped entirely.
+    // Finnhub is only called once per calendar day per ticker.
+    func fetchPriceAnalysis(for realTicker: String) async throws -> PriceAnalysis {
+        let today    = Self.cacheDateFormatter.string(from: Date())
+        let cacheKey = "90d.\(realTicker)"
+
+        if let raw    = UserDefaults.standard.data(forKey: cacheKey),
+           let cached = try? JSONDecoder().decode(AnalysisCache.self, from: raw),
+           cached.dateString == today,
+           let analysis = PriceAnalyzer.analyze(closePrices: cached.closePrices) {
+            return analysis
+        }
+
+        var components = URLComponents(string: "https://www.alphavantage.co/query")
+        components?.queryItems = [
+            URLQueryItem(name: "function",   value: "TIME_SERIES_DAILY"),
+            URLQueryItem(name: "symbol",     value: realTicker),
+            URLQueryItem(name: "outputsize", value: "compact"),
+            URLQueryItem(name: "apikey",     value: Secrets.alphaadvantageAPIKey),
+        ]
+        guard let url = components?.url else { throw StockServiceError.badURL }
+
+        let (data, response) = try await URLSession.shared.data(from: url)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw StockServiceError.badResponse
+        }
+
+        let avResponse = try JSONDecoder().decode(AVDailyResponse.self, from: data)
+        let closes = avResponse.timeSeries
+            .sorted { $0.key < $1.key }   // "yyyy-MM-dd" sorts lexicographically = chronologically
+            .suffix(90)
+            .compactMap { Double($0.value.close) }
+        guard !closes.isEmpty else { throw StockServiceError.emptyQuote }
+
+        // Persist so every open today skips the network call.
+        if let encoded = try? JSONEncoder().encode(AnalysisCache(dateString: today, closePrices: closes)) {
+            UserDefaults.standard.set(encoded, forKey: cacheKey)
+        }
+
+        guard let analysis = PriceAnalyzer.analyze(closePrices: closes) else {
+            throw StockServiceError.emptyQuote
+        }
+        return analysis
+    }
+
+    private static let cacheDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
 
     private func fetchQuote(ticker: String) async throws -> FinnhubQuote {
 

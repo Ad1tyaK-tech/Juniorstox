@@ -34,7 +34,7 @@ struct StockAlias {
 
 let stockAliases: [StockAlias] = [
     // High-level blue chips
-    StockAlias(realTicker: "AAPL",  displaySymbol: "ORG", displayCompany: "Orange"),
+    StockAlias(realTicker: "AAPL",  displaySymbol: "PEA", displayCompany: "Pear"),
     StockAlias(realTicker: "MSFT",  displaySymbol: "MDS", displayCompany: "Macrodense"),
     StockAlias(realTicker: "NVDA",  displaySymbol: "NMV", displayCompany: "Nmovia"),
     StockAlias(realTicker: "GOOG",  displaySymbol: "GEG", displayCompany: "Geggol"),
@@ -54,8 +54,8 @@ let stockAliases: [StockAlias] = [
 let sampleStocks: [Stock] = [
 
     Stock(
-        symbol: "ORG",
-        company: "Orange",
+        symbol: "PEA",
+        company: "Pear",
         realTicker: "AAPL",
         price: 213.45,
         changePercent: 0.57,
