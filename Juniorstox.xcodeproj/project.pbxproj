@@ -186,7 +186,7 @@
 					};
 				};
 			};
-			buildConfigurationList = AF4FE2042FC2491B00E0958B /* Build configuration list for PBXProject "stox junior" */;
+			buildConfigurationList = AF4FE2042FC2491B00E0958B /* Build configuration list for PBXProject "Juniorstox" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -578,7 +578,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		AF4FE2042FC2491B00E0958B /* Build configuration list for PBXProject "stox junior" */ = {
+		AF4FE2042FC2491B00E0958B /* Build configuration list for PBXProject "Juniorstox" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				AF4FE22A2FC2491D00E0958B /* Debug */,
