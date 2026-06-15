@@ -21,10 +21,5 @@ struct InfoView: View {
         }
         .padding()
     }
-}//
-//  infoview.swift
-//  stox junior
-//
-//  Created by Aditya Kiran on 5/25/26.
-//
+}
 

@@ -30,21 +30,26 @@ struct StockAlias {
     let realTicker: String
     let displaySymbol: String
     let displayCompany: String
+    let sector: String
 }
 
 let stockAliases: [StockAlias] = [
-    // High-level blue chips
-    StockAlias(realTicker: "AAPL",  displaySymbol: "PEA", displayCompany: "Pear"),
-    StockAlias(realTicker: "MSFT",  displaySymbol: "MDS", displayCompany: "Macrodense"),
-    StockAlias(realTicker: "NVDA",  displaySymbol: "NMV", displayCompany: "Nmovia"),
-    StockAlias(realTicker: "GOOG",  displaySymbol: "GEG", displayCompany: "Geggol"),
-    StockAlias(realTicker: "AMZN",  displaySymbol: "BRZ", displayCompany: "Bravozon"),
-    StockAlias(realTicker: "META",  displaySymbol: "ATE", displayCompany: "Atem Systems"),
-    // Mid / volatile
-    StockAlias(realTicker: "TSLA",  displaySymbol: "EIN", displayCompany: "Einstein"),
-    StockAlias(realTicker: "AMD",   displaySymbol: "SMD", displayCompany: "Strong Mini Devices"),
-    StockAlias(realTicker: "COIN",  displaySymbol: "DST", displayCompany: "Dollarstand"),
-    StockAlias(realTicker: "RBLX",  displaySymbol: "PLY", displayCompany: "Playbit"),
+    // Big Tech
+    StockAlias(realTicker: "AAPL",  displaySymbol: "PEA", displayCompany: "Pear",                sector: "Big Tech"),
+    StockAlias(realTicker: "MSFT",  displaySymbol: "MDS", displayCompany: "Macrodense",           sector: "Big Tech"),
+    StockAlias(realTicker: "GOOG",  displaySymbol: "GEG", displayCompany: "Geggol",               sector: "Big Tech"),
+    StockAlias(realTicker: "META",  displaySymbol: "ATE", displayCompany: "Atem Systems",         sector: "Big Tech"),
+    // Chip Makers
+    StockAlias(realTicker: "NVDA",  displaySymbol: "NMV", displayCompany: "Nmovia",               sector: "Chip Makers"),
+    StockAlias(realTicker: "AMD",   displaySymbol: "SMD", displayCompany: "Strong Mini Devices",  sector: "Chip Makers"),
+    // Shopping
+    StockAlias(realTicker: "AMZN",  displaySymbol: "BRZ", displayCompany: "Bravozon",             sector: "Shopping"),
+    // Cars & Energy
+    StockAlias(realTicker: "TSLA",  displaySymbol: "EIN", displayCompany: "Einstein",             sector: "Cars & Energy"),
+    // Money & Crypto
+    StockAlias(realTicker: "COIN",  displaySymbol: "DST", displayCompany: "Dollarstand",          sector: "Money & Crypto"),
+    // Gaming
+    StockAlias(realTicker: "RBLX",  displaySymbol: "PLY", displayCompany: "Playbit",              sector: "Gaming"),
 ]
 
 // MARK: - SAMPLE DATA

@@ -3,6 +3,7 @@ import SwiftUI
 struct StockCard: View {
 
     let stock: Stock
+    var shares: Int? = nil
 
     var body: some View {
 
@@ -12,10 +13,16 @@ struct StockCard: View {
 
                 Text(stock.company)
                     .font(.headline)
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.textPrimary)
 
                 Text(stock.symbol)
-                    .foregroundColor(.gray)
+                    .foregroundColor(AppColors.textSecondary)
+
+                if let shares {
+                    Text("\(shares) share\(shares == 1 ? "" : "s")")
+                        .font(.caption)
+                        .foregroundColor(AppColors.textTertiary)
+                }
             }
 
             Spacer()
@@ -23,26 +30,24 @@ struct StockCard: View {
             VStack(alignment: .trailing, spacing: 6) {
 
                 Text("$\(stock.price, specifier: "%.2f")")
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.textPrimary)
 
                 Text(
-                    "\(stock.changePercent, specifier: "%.5f")%"
+                    "\(stock.changePercent, specifier: "%.2f")%"
                 )
                 .foregroundColor(
                     stock.changePercent >= 0
-                    ? .green
-                    : .red
+                    ? AppColors.gain
+                    : AppColors.loss
                 )
             }
         }
         .padding()
-        .background(Color.white.opacity(0.06))
+        .background(AppColors.surface)
         .cornerRadius(18)
+        .overlay(
+            RoundedRectangle(cornerRadius: 18)
+                .stroke(AppColors.cardBorder, lineWidth: 1)
+        )
     }
-}//
-//  stockcard.swift
-//  stox junior
-//
-//  Created by Aditya Kiran on 5/25/26.
-//
-
+}

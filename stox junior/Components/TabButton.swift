@@ -13,21 +13,15 @@ struct DashboardTabButton: View {
 
             Text(title)
                 .fontWeight(.semibold)
-                .foregroundColor(selected ? .black : .white)
+                .foregroundColor(selected ? .white : AppColors.textSecondary)
                 .padding(.vertical, 10)
                 .frame(maxWidth: .infinity)
                 .background(
                     selected
-                    ? Color.green
-                    : Color.white.opacity(0.08)
+                    ? AppColors.accent
+                    : AppColors.surfaceSecondary
                 )
                 .cornerRadius(12)
         }
     }
-}//
-//  tabbutton.swift
-//  stox junior
-//
-//  Created by Aditya Kiran on 5/25/26.
-//
-
+}

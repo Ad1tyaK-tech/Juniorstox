@@ -5,7 +5,7 @@ struct AnalysisRow: View {
     let title: String
     let value: String
     var info: String? = nil
-    var valueColor: Color = .white
+    var valueColor: Color = AppColors.textPrimary
 
     @State private var showInfo = false
 
@@ -16,7 +16,7 @@ struct AnalysisRow: View {
             HStack {
 
                 Text(title)
-                    .foregroundColor(.gray)
+                    .foregroundColor(AppColors.textSecondary)
 
                 if info != nil {
                     Button {
@@ -26,7 +26,7 @@ struct AnalysisRow: View {
                     } label: {
                         Image(systemName: showInfo ? "info.circle.fill" : "info.circle")
                             .font(.caption)
-                            .foregroundColor(.blue.opacity(0.8))
+                            .foregroundColor(AppColors.accent)
                     }
                     .buttonStyle(.plain)
                 }
@@ -41,10 +41,10 @@ struct AnalysisRow: View {
             if showInfo, let info {
                 Text(info)
                     .font(.caption)
-                    .foregroundColor(.blue.opacity(0.9))
+                    .foregroundColor(AppColors.accent)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 8)
-                    .background(Color.blue.opacity(0.12))
+                    .background(AppColors.accent.opacity(0.10))
                     .cornerRadius(8)
             }
         }

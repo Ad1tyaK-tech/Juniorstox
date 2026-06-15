@@ -29,13 +29,7 @@ struct ProfileButton: View {
             }
         }
         .frame(width: 38, height: 38)
-        .background(Color.gray.opacity(0.4))
+        .background(AppColors.accent)
         .clipShape(Circle())
     }
-}//
-//  profilebutton.swift
-//  stox junior
-//
-//  Created by Aditya Kiran on 5/25/26.
-//
-
+}

@@ -15,23 +15,15 @@ struct ProfileView: View {
                 .font(.title.bold())
 
             Text("Cash: $\(appState.cashBalance, specifier: "%.2f")")
-                .foregroundColor(.green)
+                .foregroundColor(AppColors.gain)
 
             Button("Logout") {
-                appState.authState = .welcome
-                appState.ownedStocks = []
-                appState.cashBalance = 10000
+                appState.logout()
             }
-            .foregroundColor(.red)
+            .foregroundColor(AppColors.loss)
 
             Spacer()
         }
         .padding()
     }
-}//
-//  profileview.swift
-//  stox junior
-//
-//  Created by Aditya Kiran on 5/25/26.
-//
-
+}

@@ -1,102 +1,113 @@
 import SwiftUI
+import SwiftData
 
 struct LoginView: View {
+
     @EnvironmentObject var appState: AppState
+    @Environment(\.modelContext) private var modelContext
 
-    @State private var email = ""
+    @State private var username = ""
     @State private var password = ""
+    @State private var errorMessage: String? = nil
 
-    var canLogin: Bool {
-        !email.isEmpty && !password.isEmpty
-    }
+    private var canAttempt: Bool { !username.isEmpty && !password.isEmpty }
 
     var body: some View {
 
         ZStack {
-            Color.black.ignoresSafeArea()
-            
+            AppColors.background.ignoresSafeArea()
+
             VStack {
                 HStack {
-                    
                     Button {
                         appState.authState = .welcome
                     } label: {
                         Image(systemName: "chevron.left")
-                            .foregroundColor(.white)
+                            .foregroundColor(AppColors.textPrimary)
                             .font(.title3)
                     }
-                    
                     Spacer()
                 }
                 .padding()
-                
+
                 Spacer()
-                
+
                 VStack(spacing: 25) {
-                    
+
                     Spacer()
-                    
-                    Text("Login")
-                        .font(.largeTitle.bold())
-                        .foregroundColor(.white)
-                    
+
                     Text("Welcome back")
-                        .foregroundColor(.gray)
-                    
-                    // EMAIL
-                    VStack(alignment: .leading, spacing: 6) {
-                        
-                        TextField("Email", text: $email)
-                            .keyboardType(.emailAddress)
-                            .textInputAutocapitalization(.never)
+                        .font(.largeTitle.bold())
+                        .foregroundColor(AppColors.textPrimary)
+
+                    Text("Log in to your account")
+                        .foregroundColor(AppColors.textSecondary)
+
+                    VStack(spacing: 16) {
+
+                        TextField("Name", text: $username)
+                            .textInputAutocapitalization(.words)
                             .autocorrectionDisabled(true)
                             .padding()
-                            .background(Color.white.opacity(0.08))
-                            .foregroundColor(.white)
-                            .cornerRadius(12)
-                    }
-                    
-                    // PASSWORD
-                    VStack(alignment: .leading, spacing: 6) {
-                        
+                            .background(AppColors.inputBackground)
+                            .foregroundColor(AppColors.textPrimary)
+                            .cornerRadius(14)
+
                         SecureField("Password", text: $password)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled(true)
                             .padding()
-                            .background(Color.white.opacity(0.08))
-                            .foregroundColor(.white)
-                            .cornerRadius(12)
+                            .background(AppColors.inputBackground)
+                            .foregroundColor(AppColors.textPrimary)
+                            .cornerRadius(14)
                     }
-                    
-                    // LOGIN BUTTON
+                    .padding(.horizontal, 30)
+
+                    if let error = errorMessage {
+                        Text(error)
+                            .font(.caption)
+                            .foregroundColor(AppColors.loss)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 30)
+                    }
+
                     Button {
-                        // simple login (no backend yet)
-                        DispatchQueue.main.async {
-                            appState.authState = .loggedIn
-                        }
-                        
+                        attemptLogin()
                     } label: {
-                        
                         Text("Log In")
                             .fontWeight(.bold)
-                            .foregroundColor(.black)
+                            .foregroundColor(canAttempt ? .white : AppColors.textTertiary)
                             .frame(maxWidth: .infinity)
                             .padding()
-                            .background(canLogin ? Color.green : Color.gray)
+                            .background(canAttempt ? AppColors.accent : AppColors.inputBackground)
                             .cornerRadius(14)
                             .padding(.horizontal, 30)
                     }
-                    .disabled(!canLogin)
-                    
+                    .disabled(!canAttempt)
+
                     Spacer()
                 }
             }
         }
+        .onChange(of: username) { _, _ in errorMessage = nil }
+        .onChange(of: password) { _, _ in errorMessage = nil }
     }
-}//
-//  loginview.swift
-//  stox junior
-//
-//  Created by Aditya Kiran on 5/25/26.
-//
 
+    private func attemptLogin() {
+        let name = username.trimmingCharacters(in: .whitespaces)
+        let predicate = #Predicate<UserAccount> { $0.username == name }
+        let descriptor = FetchDescriptor<UserAccount>(predicate: predicate)
+
+        guard let account = (try? modelContext.fetch(descriptor))?.first else {
+            errorMessage = "No account found for \"\(name)\". Create one first."
+            return
+        }
+        guard account.passwordMatches(password) else {
+            errorMessage = "Wrong password. Try again."
+            return
+        }
+
+        appState.loadFrom(account, context: modelContext)
+        appState.authState = .loggedIn
+    }
+}

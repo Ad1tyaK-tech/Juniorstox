@@ -1,23 +1,21 @@
 import SwiftUI
 import Charts
 
-private enum AnalysisTab: String, CaseIterable {
-    case today    = "Today"
-    case advanced = "Advanced"
-}
-
 struct StockAnalysisView: View {
 
     let stock: Stock
 
+    @EnvironmentObject var appState: AppState
+
     @State private var priceAnalysis: PriceAnalysis? = nil
     @State private var isLoadingAnalysis = false
     @State private var isEstimated = false
-    @State private var selectedTab: AnalysisTab = .today
+    @State private var showBuySheet = false
+    @State private var showAdvanced = false
 
     private let stockService = StockService()
 
-    private var aiInsight: String {
+    private var insight: String {
         let c = stock.changePercent
         switch c {
         case 6...:
@@ -42,41 +40,67 @@ struct StockAnalysisView: View {
             VStack(alignment: .leading, spacing: 20) {
 
                 // HEADER
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(stock.company)
-                        .font(.largeTitle.bold())
-                        .foregroundColor(.white)
-                    Text(stock.symbol)
-                        .foregroundColor(.gray)
-                    Text("Current Price: $\(stock.price, specifier: "%.2f")")
-                        .foregroundColor(.green)
-                        .font(.title3.bold())
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(stock.company)
+                            .font(.largeTitle.bold())
+                            .foregroundColor(AppColors.textPrimary)
+                        Text(stock.symbol)
+                            .foregroundColor(AppColors.textSecondary)
+                        Text("Current Price: $\(stock.price, specifier: "%.2f")")
+                            .foregroundColor(AppColors.gain)
+                            .font(.title3.bold())
+                    }
+                    Spacer()
+                    Button {
+                        showBuySheet = true
+                    } label: {
+                        Label("Buy", systemImage: "cart.badge.plus")
+                            .font(.subheadline.bold())
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(AppColors.accent)
+                            .clipShape(Capsule())
+                    }
+                    .padding(.top, 4)
                 }
 
                 Divider()
-                    .background(Color.gray)
 
-                // TAB PICKER
-                Picker("", selection: $selectedTab) {
-                    ForEach(AnalysisTab.allCases, id: \.self) { tab in
-                        Text(tab.rawValue).tag(tab)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .padding(.bottom, 4)
+                insightCard
 
-                switch selectedTab {
-                case .today:
-                    todayContent
-                case .advanced:
-                    advancedContent
+                chartSection
+
+                if let analysis = priceAnalysis {
+                    trendSignalCard(analysis: analysis)
                 }
+
+                marketDataCard
+
+                advancedDropdown
 
                 Spacer()
             }
             .padding()
         }
-        .background(Color.black)
+        .background(AppColors.background)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(AppColors.background.opacity(0.95), for: .navigationBar)
+        .toolbarColorScheme(.light, for: .navigationBar)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showBuySheet = true
+                } label: {
+                    Label("Buy", systemImage: "cart.badge.plus")
+                        .foregroundColor(AppColors.accent)
+                }
+            }
+        }
+        .sheet(isPresented: $showBuySheet) {
+            BuySheet(stock: stock)
+        }
         .task {
             isLoadingAnalysis = true
             do {
@@ -97,90 +121,147 @@ struct StockAnalysisView: View {
         }
     }
 
-    // MARK: - Today Tab
+    // MARK: - Insight Card
 
-    private var todayContent: some View {
-        VStack(alignment: .leading, spacing: 20) {
+    private var insightCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Insight")
+                .font(.title2.bold())
+                .foregroundColor(AppColors.textPrimary)
+            Text(insight)
+                .foregroundColor(AppColors.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding()
+        .background(AppColors.surface)
+        .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(AppColors.cardBorder, lineWidth: 1)
+        )
+    }
 
-            // Market Data
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Market Data")
-                    .font(.title2.bold())
-                    .foregroundColor(.white)
+    // MARK: - Chart Section (loads async, always shown)
 
-                AnalysisRow(
-                    title: "Trend",
-                    value: stock.trend,
-                    info: "Is this stock going up or down today? Increasing means more people are buying it, Decreasing means more people are selling."
-                )
-                AnalysisRow(
-                    title: "Slope",
-                    value: String(format: "%.5f", stock.slopeRate),
-                    info: "How fast the price is moving. A bigger positive number means it's rising quickly. A negative number means it's dropping. Think of it like the steepness of a hill."
-                )
-                AnalysisRow(
-                    title: "Max Price",
-                    value: String(format: "$%.2f", stock.maxima),
-                    info: "The highest price this stock hit today — its peak moment. If the current price is close to this, it's near its best point of the day."
-                )
-                AnalysisRow(
-                    title: "Min Price",
-                    value: String(format: "$%.2f", stock.minima),
-                    info: "The lowest price today — the cheapest it's been. If the current price is close to this, it might be a more affordable entry point."
-                )
-                AnalysisRow(
-                    title: "Support Floor",
-                    value: String(format: "$%.2f", stock.floor),
-                    info: "Yesterday's closing price. This acts like a baseline — if today's price is above it, the stock is doing better than yesterday!"
-                )
-                AnalysisRow(
-                    title: "Daily Change",
-                    value: String(format: "%.5f%%", stock.changePercent),
-                    info: "How much the price has changed today compared to yesterday, shown as a percentage. Positive means it grew, negative means it shrank."
-                )
+    @ViewBuilder
+    private var chartSection: some View {
+        if isLoadingAnalysis && priceAnalysis == nil {
+            VStack(spacing: 12) {
+                ProgressView().tint(AppColors.accent)
+                Text("Crunching 90 days of data…")
+                    .font(.caption)
+                    .foregroundColor(AppColors.textSecondary)
             }
-            .padding()
-            .background(Color.white.opacity(0.05))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 40)
+            .background(AppColors.surface)
             .cornerRadius(16)
-
-            // AI Insight
-            VStack(alignment: .leading, spacing: 10) {
-                Text("AI Insight")
-                    .font(.title2.bold())
-                    .foregroundColor(.white)
-                Text(aiInsight)
-                    .foregroundColor(.gray)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding()
-            .background(Color.white.opacity(0.05))
-            .cornerRadius(16)
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(AppColors.cardBorder, lineWidth: 1)
+            )
+        } else if let analysis = priceAnalysis {
+            chartCard(analysis: analysis)
         }
     }
 
-    // MARK: - Advanced Tab
+    // MARK: - Market Data Card
 
-    @ViewBuilder
-    private var advancedContent: some View {
-        if isLoadingAnalysis && priceAnalysis == nil {
-            HStack {
-                Spacer()
-                VStack(spacing: 12) {
-                    ProgressView().tint(.white)
-                    Text("Crunching 90 days of data…")
-                        .font(.caption)
-                        .foregroundColor(.gray)
+    private var marketDataCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Market Data")
+                .font(.title2.bold())
+                .foregroundColor(AppColors.textPrimary)
+
+            AnalysisRow(
+                title: "Trend",
+                value: stock.trend,
+                info: "Is this stock going up or down today? Increasing means more people are buying it, Decreasing means more people are selling."
+            )
+            AnalysisRow(
+                title: "Slope",
+                value: String(format: "%.2f", stock.slopeRate),
+                info: "How fast the price is moving. A bigger positive number means it's rising quickly. A negative number means it's dropping. Think of it like the steepness of a hill."
+            )
+            AnalysisRow(
+                title: "Max Price",
+                value: String(format: "$%.2f", stock.maxima),
+                info: "The highest price this stock hit today — its peak moment. If the current price is close to this, it's near its best point of the day."
+            )
+            AnalysisRow(
+                title: "Min Price",
+                value: String(format: "$%.2f", stock.minima),
+                info: "The lowest price today — the cheapest it's been. If the current price is close to this, it might be a more affordable entry point."
+            )
+            AnalysisRow(
+                title: "Support Floor",
+                value: String(format: "$%.2f", stock.floor),
+                info: "Yesterday's closing price. This acts like a baseline — if today's price is above it, the stock is doing better than yesterday!"
+            )
+            AnalysisRow(
+                title: "Daily Change",
+                value: String(format: "%.2f%%", stock.changePercent),
+                info: "How much the price has changed today compared to yesterday, shown as a percentage. Positive means it grew, negative means it shrank."
+            )
+        }
+        .padding()
+        .background(AppColors.surface)
+        .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(AppColors.cardBorder, lineWidth: 1)
+        )
+    }
+
+    // MARK: - Advanced Dropdown
+
+    private var advancedDropdown: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) { showAdvanced.toggle() }
+                if showAdvanced { appState.trackAdvancedDropdown(ticker: stock.realTicker) }
+            } label: {
+                HStack {
+                    Label("Advanced Analysis", systemImage: "chart.xyaxis.line")
+                        .font(.headline)
+                        .foregroundColor(AppColors.textPrimary)
+                    Spacer()
+                    Image(systemName: "chevron.down")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(AppColors.textTertiary)
+                        .rotationEffect(.degrees(showAdvanced ? 180 : 0))
                 }
-                Spacer()
+                .padding(14)
+                .background(AppColors.surface)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(AppColors.cardBorder, lineWidth: 1)
+                )
             }
-            .padding(.top, 40)
-        } else if let analysis = priceAnalysis {
-            VStack(alignment: .leading, spacing: 20) {
-                chartCard(analysis: analysis)
-                trendSignalCard(analysis: analysis)
-                statsCard(analysis: analysis)
-                extremaCard(analysis: analysis)
-                glossaryCard
+            .buttonStyle(.plain)
+
+            if showAdvanced {
+                if isLoadingAnalysis && priceAnalysis == nil {
+                    HStack {
+                        Spacer()
+                        VStack(spacing: 10) {
+                            ProgressView().tint(AppColors.accent)
+                            Text("Crunching 90 days of data…")
+                                .font(.caption)
+                                .foregroundColor(AppColors.textSecondary)
+                        }
+                        Spacer()
+                    }
+                    .padding(.top, 8)
+                } else if let analysis = priceAnalysis {
+                    VStack(alignment: .leading, spacing: 16) {
+                        statsCard(analysis: analysis)
+                        extremaCard(analysis: analysis)
+                        glossaryCard
+                    }
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
             }
         }
     }
@@ -194,10 +275,10 @@ struct StockAnalysisView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("90-Day Price Chart")
                         .font(.title2.bold())
-                        .foregroundColor(.white)
+                        .foregroundColor(AppColors.textPrimary)
                     Text("Closing price each trading day")
                         .font(.caption)
-                        .foregroundColor(.gray)
+                        .foregroundColor(AppColors.textSecondary)
                 }
                 Spacer()
                 if isEstimated { estimatedBadge }
@@ -205,22 +286,25 @@ struct StockAnalysisView: View {
 
             GraphView(
                 closePrices: analysis.closePrices,
-                sma: analysis.sma,
                 trendSignal: analysis.trendSignal
             )
         }
         .padding()
-        .background(Color.white.opacity(0.05))
+        .background(AppColors.surface)
         .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(AppColors.cardBorder, lineWidth: 1)
+        )
     }
 
     @ViewBuilder
     private func trendSignalCard(analysis: PriceAnalysis) -> some View {
         let signalColor: Color = {
             switch analysis.trendSignal {
-            case .bullish: return .green
-            case .bearish:  return .red
-            case .neutral:  return .yellow
+            case .bullish: return AppColors.gain
+            case .bearish:  return AppColors.loss
+            case .neutral:  return AppColors.highlight
             }
         }()
         let signalIcon: String = {
@@ -244,7 +328,7 @@ struct StockAnalysisView: View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Trend Signal")
                 .font(.title2.bold())
-                .foregroundColor(.white)
+                .foregroundColor(AppColors.textPrimary)
 
             HStack(spacing: 14) {
                 Image(systemName: signalIcon)
@@ -257,13 +341,13 @@ struct StockAnalysisView: View {
                         .foregroundColor(signalColor)
                     Text(signalExplainer)
                         .font(.caption)
-                        .foregroundColor(.gray)
+                        .foregroundColor(AppColors.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
         .padding()
-        .background(signalColor.opacity(0.07))
+        .background(signalColor.opacity(0.08))
         .overlay(
             RoundedRectangle(cornerRadius: 16)
                 .stroke(signalColor.opacity(0.25), lineWidth: 1)
@@ -278,10 +362,10 @@ struct StockAnalysisView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Quantitative Stats")
                         .font(.title2.bold())
-                        .foregroundColor(.white)
+                        .foregroundColor(AppColors.textPrimary)
                     Text("Calculated from 90 trading days of closes")
                         .font(.caption)
-                        .foregroundColor(.gray)
+                        .foregroundColor(AppColors.textSecondary)
                 }
                 Spacer()
                 if isEstimated { estimatedBadge }
@@ -314,8 +398,12 @@ struct StockAnalysisView: View {
             )
         }
         .padding()
-        .background(Color.white.opacity(0.05))
+        .background(AppColors.surface)
         .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(AppColors.cardBorder, lineWidth: 1)
+        )
     }
 
     @ViewBuilder
@@ -327,10 +415,10 @@ struct StockAnalysisView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Local Extrema")
                     .font(.title2.bold())
-                    .foregroundColor(.white)
+                    .foregroundColor(AppColors.textPrimary)
                 Text("Days where price reversed relative to neighbors")
                     .font(.caption)
-                    .foregroundColor(.gray)
+                    .foregroundColor(AppColors.textSecondary)
             }
 
             AnalysisRow(
@@ -339,7 +427,7 @@ struct StockAnalysisView: View {
                     ? "None"
                     : "\(analysis.localMaxima.count)  ·  highest $\(String(format: "%.2f", peakHigh ?? 0))",
                 info: "A local peak (local maximum) occurs when a closing price is strictly higher than the day before AND the day after — a mini mountaintop. Peaks are potential resistance levels: price struggled to push past them before reversing.",
-                valueColor: .green
+                valueColor: AppColors.gain
             )
 
             AnalysisRow(
@@ -348,7 +436,7 @@ struct StockAnalysisView: View {
                     ? "None"
                     : "\(analysis.localMinima.count)  ·  lowest $\(String(format: "%.2f", troughLow ?? 0))",
                 info: "A local trough (local minimum) occurs when a closing price is strictly lower than both neighbors — a mini valley. Troughs are potential support levels and can mark buying opportunities if the stock consistently bounces from them.",
-                valueColor: .red
+                valueColor: AppColors.loss
             )
 
             if !analysis.localMaxima.isEmpty && !analysis.localMinima.isEmpty,
@@ -356,25 +444,29 @@ struct StockAnalysisView: View {
                 let range = high - low
                 HStack {
                     Image(systemName: "arrow.up.arrow.down")
-                        .foregroundColor(.purple)
+                        .foregroundColor(AppColors.purple)
                         .font(.caption)
                     Text("Swing range over 90 days: \(String(format: "$%.2f", range))")
                         .font(.caption)
-                        .foregroundColor(.gray)
+                        .foregroundColor(AppColors.textSecondary)
                 }
                 .padding(.top, 4)
             }
         }
         .padding()
-        .background(Color.white.opacity(0.05))
+        .background(AppColors.surface)
         .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(AppColors.cardBorder, lineWidth: 1)
+        )
     }
 
     private var glossaryCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             Label("Concepts in This Tab", systemImage: "book.closed.fill")
                 .font(.headline)
-                .foregroundColor(.white)
+                .foregroundColor(AppColors.textPrimary)
 
             GlossaryRow(term: "SMA", definition: "Simple Moving Average — smooths out daily noise by averaging closes over a window (20 days here). The price crossing above/below it is a classic buy/sell signal.")
             GlossaryRow(term: "OLS Slope", definition: "Ordinary Least-Squares regression — draws the single best-fit straight line through all 90 data points and measures its steepness. More robust than comparing just two points.")
@@ -383,10 +475,10 @@ struct StockAnalysisView: View {
             GlossaryRow(term: "Bullish / Bearish", definition: "Bull = expecting prices to rise. Bear = expecting prices to fall. Comes from how each animal attacks — bulls thrust upward, bears swipe down.")
         }
         .padding()
-        .background(Color.indigo.opacity(0.08))
+        .background(AppColors.indigo.opacity(0.06))
         .overlay(
             RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.indigo.opacity(0.2), lineWidth: 1)
+                .stroke(AppColors.indigo.opacity(0.15), lineWidth: 1)
         )
         .cornerRadius(16)
     }
@@ -394,10 +486,10 @@ struct StockAnalysisView: View {
     private var estimatedBadge: some View {
         Text("Estimated")
             .font(.caption2.bold())
-            .foregroundColor(.orange)
+            .foregroundColor(AppColors.warning)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
-            .background(Color.orange.opacity(0.15))
+            .background(AppColors.warning.opacity(0.12))
             .cornerRadius(5)
     }
 }
@@ -417,22 +509,22 @@ private struct GlossaryRow: View {
                 HStack {
                     Text(term)
                         .font(.subheadline.bold())
-                        .foregroundColor(.indigo)
+                        .foregroundColor(AppColors.indigo)
                     Spacer()
                     Image(systemName: expanded ? "chevron.up" : "chevron.down")
                         .font(.caption2)
-                        .foregroundColor(.gray)
+                        .foregroundColor(AppColors.textSecondary)
                 }
                 if expanded {
                     Text(definition)
                         .font(.caption)
-                        .foregroundColor(.gray)
+                        .foregroundColor(AppColors.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .padding(.vertical, 6)
         }
         .buttonStyle(.plain)
-        Divider().background(Color.white.opacity(0.08))
+        Divider()
     }
 }

@@ -1,11 +1,5 @@
-//
-//  stox_juniorApp.swift
-//  stox junior
-//
-//  Created by Aditya Kiran on 5/23/26.
-//
-
 import SwiftUI
+import SwiftData
 
 @main
 struct StoxApp: App {
@@ -13,5 +7,6 @@ struct StoxApp: App {
         WindowGroup {
             RootView()
         }
+        .modelContainer(for: UserAccount.self)
     }
 }
