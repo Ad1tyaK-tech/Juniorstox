@@ -15,6 +15,7 @@ final class UserAccount {
     var createdDate: Date
     var dailyChallengeJSON: String = "{}"
     var achievementsJSON: String = "{}"
+    var settingsJSON: String = "{}"
 
     init(username: String, password: String) {
         self.username = username

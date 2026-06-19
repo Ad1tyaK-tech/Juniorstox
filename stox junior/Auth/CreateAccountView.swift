@@ -7,6 +7,7 @@ struct CreateAccountView: View {
     @Environment(\.modelContext) private var modelContext
 
     @State private var fullName = ""
+    @State private var email = ""
     @State private var password = ""
     @State private var confirmPassword = ""
     @State private var errorMessage: String? = nil
@@ -72,6 +73,34 @@ struct CreateAccountView: View {
                             .foregroundColor(AppColors.textPrimary)
                             .cornerRadius(14)
 
+                        VStack(spacing: 0) {
+                            TextField("Email (optional)", text: $email)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled(true)
+                                .keyboardType(.emailAddress)
+                                .padding()
+                                .background(AppColors.inputBackground)
+                                .foregroundColor(AppColors.textPrimary)
+                                .cornerRadius(14)
+
+                            HStack(alignment: .top, spacing: 6) {
+                                Image(systemName: "lock.shield")
+                                    .font(.caption2)
+                                    .foregroundColor(AppColors.textTertiary)
+                                    .padding(.top, 1)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Email is optional — we won't share your data.")
+                                        .font(.caption2)
+                                        .foregroundColor(AppColors.textTertiary)
+                                    Text("Without one, a forgotten password means a lost account.")
+                                        .font(.caption2)
+                                        .foregroundColor(AppColors.warning)
+                                }
+                            }
+                            .padding(.top, 6)
+                            .padding(.horizontal, 4)
+                        }
+
                         if !password.isEmpty && !isPasswordValid {
                             Text("Password must be at least 8 characters")
                                 .font(.caption)
@@ -128,6 +157,11 @@ struct CreateAccountView: View {
         try? modelContext.save()
 
         appState.loadFrom(account, context: modelContext)
+        let trimmedEmail = email.trimmingCharacters(in: .whitespaces)
+        if !trimmedEmail.isEmpty {
+            appState.linkedEmail = trimmedEmail
+            appState.saveToAccount()
+        }
         appState.authState = .loggedIn
     }
 }

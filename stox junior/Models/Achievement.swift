@@ -50,7 +50,7 @@ struct AchievementDef: Identifiable {
     func description(for tier: AchievementTier) -> String {
         let n = thresholds[tier.rawValue]
         switch id {
-        case "diversePortfolio": return "Buy into \(n)+ different stocks"
+        case "diversePortfolio": return "Buy \(n)+ shares in 8+ different stocks"
         case "investor":         return "Hold \(n)+ shares in one stock at once"
         case "gambler":          return "Buy \(n)+ shares in volatile stocks (±2% today)"
         case "intellectual":     return "Open the advanced view \(n)+ times"
@@ -58,6 +58,9 @@ struct AchievementDef: Identifiable {
         case "safeInvestor":     return "Buy \(n)+ shares of steady stocks"
         case "momentumBuyer":    return "Buy \(n)+ shares in fast-rising stocks (+2% today)"
         case "bargainer":        return "Buy \(n)+ shares near a stock's floor price"
+        case "marketAddict":
+            let windows = [5, 7, 15, 25, 100]
+            return "Open the app \(n)× within \(windows[tier.rawValue]) days"
         default:                 return ""
         }
     }
@@ -87,5 +90,8 @@ struct AchievementDef: Identifiable {
         .init(id: "bargainer",        title: "Bargainer",
               icon: "tag.fill",
               thresholds: [5, 20, 50, 100, 250]),
+        .init(id: "marketAddict",     title: "Market Addict",
+              icon: "flame.fill",
+              thresholds: [15, 30, 50, 100, 500]),
     ]
 }

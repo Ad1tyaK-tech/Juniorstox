@@ -76,6 +76,7 @@ struct BuySheet: View {
                             }
                             .disabled(!canAddShare)
                         }
+                        .sensoryFeedback(.impact(weight: .light, intensity: 0.7), trigger: shares)
                         .clipShape(RoundedRectangle(cornerRadius: 14))
                         .overlay(
                             RoundedRectangle(cornerRadius: 14)
@@ -130,6 +131,8 @@ struct BuySheet: View {
                         .cornerRadius(14)
 
                         Button {
+                            HapticsManager.buy()
+                            SoundManager.shared.playKaChing()
                             appState.buyStock(stock, shares: shares)
                             dismiss()
                         } label: {

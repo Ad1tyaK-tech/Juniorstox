@@ -81,6 +81,8 @@ private struct AchievementCard: View {
             // Claim button when a tier's threshold has been reached
             if let c = claimable {
                 Button {
+                    HapticsManager.celebrate()
+                    SoundManager.shared.playCelebration()
                     appState.claimAchievementTier(id: def.id, tier: c)
                 } label: {
                     HStack {

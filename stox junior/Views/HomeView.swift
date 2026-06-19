@@ -129,6 +129,8 @@ struct HomeView: View {
                 }
             } else {
                 Button {
+                    HapticsManager.celebrate()
+                    SoundManager.shared.playCelebration()
                     appState.claimChallenge()
                 } label: {
                     Text(complete ? "Claim  5 💎" : "Complete to Claim")

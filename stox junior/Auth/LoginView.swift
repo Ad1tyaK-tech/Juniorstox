@@ -45,7 +45,7 @@ struct LoginView: View {
 
                     VStack(spacing: 16) {
 
-                        TextField("Name", text: $username)
+                        TextField("Username", text: $username)
                             .textInputAutocapitalization(.words)
                             .autocorrectionDisabled(true)
                             .padding()

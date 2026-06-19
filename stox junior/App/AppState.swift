@@ -57,6 +57,29 @@ class AppState: ObservableObject {
     @Published var floorSharesBought: Int = 0
     @Published private var achievementClaimedTiers: Set<String> = []
 
+    // MARK: - Streak
+
+    @Published var currentStreak: Int = 0
+    @Published var longestStreak: Int = 0
+    private var loginTimestamps: [Double] = []   // Unix time; pruned to 100 days for Market Addict
+    private var lastLoginDateKey: String = ""    // "yyyy-MM-dd" of the last processed open
+
+    // MARK: - Settings
+    @Published var selectedAvatarId: String = ""
+    @Published var ownedAvatarIds: Set<String> = []
+    @Published var hapticsDisabled: Bool = false
+    @Published var blockCellularData: Bool = false
+    @Published var linkedEmail: String = ""
+    @Published var colorSchemePref: String = "light"
+
+    var preferredColorScheme: ColorScheme? {
+        switch colorSchemePref {
+        case "dark":   return .dark
+        case "system": return nil
+        default:       return .light
+        }
+    }
+
     // SwiftData — set after login, nil when logged out
     var modelContext: ModelContext?
     var currentAccount: UserAccount?
@@ -108,7 +131,9 @@ class AppState: ObservableObject {
 
         loadChallengeState(from: account)
         loadAchievementsState(from: account)
+        loadSettingsState(from: account)
         evaluateChallengeProgress()
+        processAppOpen()
 
         // Fill in any hourly snapshots that were missed while the app was closed
         applyAfkCatchUp()
@@ -124,12 +149,14 @@ class AppState: ObservableObject {
         account.netWorthHistoryJSON = encode(netWorthHistory) ?? "[]"
         account.dailyChallengeJSON = encodeChallengeState()
         account.achievementsJSON = encodeAchievementsState()
+        account.settingsJSON = encodeSettingsState()
         try? ctx.save()
     }
 
-    /// Called from scenePhase .active — fills missed hourly slots when logged in.
+    /// Called from scenePhase .active — fills missed hourly slots and records the open when logged in.
     func catchUpSnapshots() {
         guard authState == .loggedIn else { return }
+        processAppOpen()
         applyAfkCatchUp()
     }
 
@@ -161,6 +188,18 @@ class AppState: ObservableObject {
         momentumSharesBought = 0
         floorSharesBought = 0
         achievementClaimedTiers = []
+        currentStreak = 0
+        longestStreak = 0
+        loginTimestamps = []
+        lastLoginDateKey = ""
+        selectedAvatarId = ""
+        ownedAvatarIds = []
+        hapticsDisabled = false
+        blockCellularData = false
+        linkedEmail = ""
+        colorSchemePref = "light"
+        HapticsManager.isDisabled = false
+        SoundManager.isDisabled = false
         authState = .welcome
     }
 
@@ -382,6 +421,10 @@ class AppState: ObservableObject {
         var momentumSharesBought: Int = 0
         var floorSharesBought: Int = 0
         var claimedTiers: [String] = []
+        var currentStreak: Int = 0
+        var longestStreak: Int = 0
+        var lastLoginDateKey: String = ""
+        var loginTimestamps: [Double] = []
     }
 
     private func loadAchievementsState(from account: UserAccount) {
@@ -396,6 +439,10 @@ class AppState: ObservableObject {
         momentumSharesBought = state.momentumSharesBought
         floorSharesBought    = state.floorSharesBought
         achievementClaimedTiers = Set(state.claimedTiers)
+        currentStreak    = state.currentStreak
+        longestStreak    = state.longestStreak
+        lastLoginDateKey = state.lastLoginDateKey
+        loginTimestamps  = state.loginTimestamps
     }
 
     private func encodeAchievementsState() -> String {
@@ -408,7 +455,11 @@ class AppState: ObservableObject {
             steadySharesBought:   steadySharesBought,
             momentumSharesBought: momentumSharesBought,
             floorSharesBought:    floorSharesBought,
-            claimedTiers:         Array(achievementClaimedTiers)
+            claimedTiers:         Array(achievementClaimedTiers),
+            currentStreak:        currentStreak,
+            longestStreak:        longestStreak,
+            lastLoginDateKey:     lastLoginDateKey,
+            loginTimestamps:      loginTimestamps
         )
         return encode(state) ?? "{}"
     }
@@ -423,6 +474,12 @@ class AppState: ObservableObject {
         case "safeInvestor":     return steadySharesBought
         case "momentumBuyer":    return momentumSharesBought
         case "bargainer":        return floorSharesBought
+        case "marketAddict":
+            // Progress bar shows count in the active tier's rolling window
+            let activeTier = AchievementTier.allCases.first { !isTierClaimed(id: "marketAddict", tier: $0) } ?? .platinum
+            let (_, windowDays) = marketAddictRequirements(activeTier)
+            let cutoff = Date.now.timeIntervalSince1970 - Double(windowDays) * 86400
+            return loginTimestamps.filter { $0 >= cutoff }.count
         default:                 return 0
         }
     }
@@ -435,10 +492,17 @@ class AppState: ObservableObject {
 
     // A tier is claimable when: threshold met, not yet claimed, and previous tier claimed
     // (or it's the Amateur tier which has no prereq).
+    // Market Addict uses a rolling window check instead of a single lifetime counter.
     func isTierClaimable(id: String, tier: AchievementTier) -> Bool {
         guard !isTierClaimed(id: id, tier: tier) else { return false }
-        guard let def = AchievementDef.all.first(where: { $0.id == id }) else { return false }
-        guard achievementProgress(for: id) >= def.threshold(for: tier) else { return false }
+        let thresholdMet: Bool
+        if id == "marketAddict" {
+            thresholdMet = marketAddictTierMet(tier)
+        } else {
+            guard let def = AchievementDef.all.first(where: { $0.id == id }) else { return false }
+            thresholdMet = achievementProgress(for: id) >= def.threshold(for: tier)
+        }
+        guard thresholdMet else { return false }
         if tier == .amateur { return true }
         let prev = AchievementTier(rawValue: tier.rawValue - 1)!
         return isTierClaimed(id: id, tier: prev)
@@ -456,6 +520,74 @@ class AppState: ObservableObject {
         achievementClaimedTiers.insert("\(id)_\(tier.rawValue)")
         gems += tier.gemReward
         saveToAccount()
+    }
+
+    // MARK: - Streak & Login Tracking
+
+    // Called on every app open (login + foreground). Records a timestamp for Market Addict
+    // and advances the streak once per calendar day.
+    private func processAppOpen() {
+        let nowTS = Date.now.timeIntervalSince1970
+
+        // Deduplicate rapid successive calls (e.g. loadFrom + catchUpSnapshots < 60s apart)
+        if let last = loginTimestamps.last, nowTS - last < 60 {
+            advanceStreakIfNewDay()
+            return
+        }
+
+        loginTimestamps.append(nowTS)
+        // Prune timestamps older than 100 days (max Market Addict window)
+        loginTimestamps = loginTimestamps.filter { $0 >= nowTS - 100 * 86400 }
+
+        advanceStreakIfNewDay()
+        saveToAccount()
+    }
+
+    private func advanceStreakIfNewDay() {
+        let today = Self.todayDateKey()
+        guard lastLoginDateKey != today else { return }
+
+        if lastLoginDateKey == Self.yesterdayDateKey() {
+            currentStreak += 1
+        } else {
+            currentStreak = 1
+        }
+        longestStreak    = max(longestStreak, currentStreak)
+        lastLoginDateKey = today
+
+        // Flat 1 gem per day for any active streak (streak ≥ 2)
+        if currentStreak >= 2 { gems += 1 }
+    }
+
+    private static func todayDateKey() -> String {
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM-dd"
+        return fmt.string(from: .now)
+    }
+
+    private static func yesterdayDateKey() -> String {
+        let cal = Calendar.current
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM-dd"
+        return fmt.string(from: cal.date(byAdding: .day, value: -1, to: .now)!)
+    }
+
+    // MARK: - Market Addict Helpers
+
+    private func marketAddictRequirements(_ tier: AchievementTier) -> (logins: Int, days: Int) {
+        switch tier {
+        case .amateur:  return (15,  5)
+        case .bronze:   return (30,  7)
+        case .silver:   return (50,  15)
+        case .gold:     return (100, 25)
+        case .platinum: return (500, 100)
+        }
+    }
+
+    private func marketAddictTierMet(_ tier: AchievementTier) -> Bool {
+        let (loginTarget, windowDays) = marketAddictRequirements(tier)
+        let cutoff = Date.now.timeIntervalSince1970 - Double(windowDays) * 86400
+        return loginTimestamps.filter { $0 >= cutoff }.count >= loginTarget
     }
 
     // MARK: - Private Helpers
@@ -479,5 +611,96 @@ class AppState: ObservableObject {
 
     private func encode<T: Encodable>(_ value: T) -> String? {
         (try? JSONEncoder().encode(value)).flatMap { String(data: $0, encoding: .utf8) }
+    }
+
+    // MARK: - Settings Persistence
+
+    private struct SettingsState: Codable {
+        var selectedAvatarId: String = ""
+        var ownedAvatarIds: [String] = []
+        var hapticsDisabled: Bool = false
+        var blockCellularData: Bool = false
+        var linkedEmail: String = ""
+        var colorSchemePref: String = "light"
+    }
+
+    private func loadSettingsState(from account: UserAccount) {
+        guard let data = account.settingsJSON.data(using: .utf8),
+              let state = try? JSONDecoder().decode(SettingsState.self, from: data) else { return }
+        selectedAvatarId  = state.selectedAvatarId
+        ownedAvatarIds    = Set(state.ownedAvatarIds)
+        hapticsDisabled   = state.hapticsDisabled
+        blockCellularData = state.blockCellularData
+        linkedEmail       = state.linkedEmail
+        colorSchemePref   = state.colorSchemePref
+        HapticsManager.isDisabled = state.hapticsDisabled
+        SoundManager.isDisabled = state.hapticsDisabled
+    }
+
+    private func encodeSettingsState() -> String {
+        let state = SettingsState(
+            selectedAvatarId:  selectedAvatarId,
+            ownedAvatarIds:    Array(ownedAvatarIds),
+            hapticsDisabled:   hapticsDisabled,
+            blockCellularData: blockCellularData,
+            linkedEmail:       linkedEmail,
+            colorSchemePref:   colorSchemePref
+        )
+        return encode(state) ?? "{}"
+    }
+
+    // MARK: - Avatar
+
+    func unlockAvatar(_ id: String) {
+        guard let item = AvatarItem.all.first(where: { $0.id == id }) else { return }
+        guard gems >= item.category.gemCost, !ownedAvatarIds.contains(id) else { return }
+        gems -= item.category.gemCost
+        ownedAvatarIds.insert(id)
+        saveToAccount()
+    }
+
+    func setHapticsDisabled(_ disabled: Bool) {
+        hapticsDisabled = disabled
+        HapticsManager.isDisabled = disabled
+        SoundManager.isDisabled = disabled
+        saveToAccount()
+    }
+
+    // MARK: - Portfolio Reset
+
+    func resetPortfolio(startingBalance: Double) {
+        cashBalance = startingBalance
+        sharesOwned = [:]
+        purchasePrices = [:]
+        ownedStocks = []
+        netWorthHistory = [NetWorthSnapshot(date: .now, value: startingBalance)]
+        lastSnapshotDate = .now
+        gems = 0
+        challengeProgress = 0
+        challengeClaimed = false
+        challengeDateKey = ""
+        netWorthAtDayStart = 0
+        totalSpentToday = 0
+        advancedDropdownTickers = []
+        allTimeOwnedTickers = []
+        maxSharesInOneTicker = 0
+        volatileSharesBought = 0
+        advancedOpenCount = 0
+        quickBuyCount = 0
+        steadySharesBought = 0
+        momentumSharesBought = 0
+        floorSharesBought = 0
+        achievementClaimedTiers = []
+        saveToAccount()
+    }
+
+    // MARK: - Account Deletion
+
+    func deleteAccount() {
+        guard let account = currentAccount, let ctx = modelContext else { return }
+        currentAccount = nil  // prevent saveToAccount() inside logout() from writing to deleted model
+        ctx.delete(account)
+        try? ctx.save()
+        logout()
     }
 }
