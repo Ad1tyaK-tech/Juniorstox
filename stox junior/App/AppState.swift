@@ -64,6 +64,10 @@ class AppState: ObservableObject {
     private var loginTimestamps: [Double] = []   // Unix time; pruned to 100 days for Market Addict
     private var lastLoginDateKey: String = ""    // "yyyy-MM-dd" of the last processed open
 
+    // MARK: - Tutorial
+    @Published var showTutorial: Bool = false
+    @Published var tutorialStep: Int = 0
+
     // MARK: - Settings
     @Published var selectedAvatarId: String = ""
     @Published var ownedAvatarIds: Set<String> = []
@@ -200,6 +204,8 @@ class AppState: ObservableObject {
         colorSchemePref = "light"
         HapticsManager.isDisabled = false
         SoundManager.isDisabled = false
+        showTutorial = false
+        tutorialStep = 0
         authState = .welcome
     }
 
@@ -286,6 +292,8 @@ class AppState: ObservableObject {
 
         if fetched.isEmpty {
             lastRefreshError = "Couldn't reach the market. Showing sample data."
+            evaluateChallengeProgress()
+            saveToAccount()
         } else {
             marketStocks = fetched
             lastRefreshError = nil
@@ -348,7 +356,9 @@ class AppState: ObservableObject {
         switch todayChallenge.id {
         case 4: challengeProgress = cashBalance >= 4_000 ? 1 : 0
         case 7: challengeProgress = cashBalance <= 6_000 ? 1 : 0
-        case 8: challengeProgress = netWorthAtDayStart > 0 && currentNetWorth >= netWorthAtDayStart * 1.02 ? 1 : 0
+        case 8:
+            if netWorthAtDayStart <= 0 { netWorthAtDayStart = currentNetWorth }
+            challengeProgress = currentNetWorth >= netWorthAtDayStart * 1.02 ? 1 : 0
         default: break
         }
     }

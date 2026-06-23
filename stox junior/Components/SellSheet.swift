@@ -147,6 +147,15 @@ struct SellSheet: View {
                                 .cornerRadius(14)
                         }
                     }
+
+                    HStack(spacing: 4) {
+                        Image(systemName: "graduationcap.fill")
+                            .font(.caption2)
+                        Text("Simulated · No real money involved")
+                            .font(.caption2)
+                    }
+                    .foregroundColor(AppColors.textTertiary)
+                    .frame(maxWidth: .infinity)
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 30)

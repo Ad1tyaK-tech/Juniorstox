@@ -162,6 +162,8 @@ struct CreateAccountView: View {
             appState.linkedEmail = trimmedEmail
             appState.saveToAccount()
         }
+        appState.showTutorial = true
+        appState.tutorialStep = 0
         appState.authState = .loggedIn
     }
 }

@@ -85,6 +85,14 @@ struct LoginView: View {
                     }
                     .disabled(!canAttempt)
 
+                    Button {
+                        appState.authState = .forgotPassword
+                    } label: {
+                        Text("Forgot password?")
+                            .font(.subheadline)
+                            .foregroundColor(errorMessage != nil ? AppColors.warning : AppColors.textTertiary)
+                    }
+
                     Spacer()
                 }
             }

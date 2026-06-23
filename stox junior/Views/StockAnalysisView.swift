@@ -66,6 +66,15 @@ struct StockAnalysisView: View {
                     .padding(.top, 4)
                 }
 
+                HStack(spacing: 4) {
+                    Image(systemName: "graduationcap.fill")
+                        .font(.caption2)
+                    Text("Simulated · No real money involved")
+                        .font(.caption2)
+                }
+                .foregroundColor(AppColors.textTertiary)
+                .frame(maxWidth: .infinity)
+
                 Divider()
 
                 insightCard
@@ -87,7 +96,7 @@ struct StockAnalysisView: View {
         .background(AppColors.background)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(AppColors.background.opacity(0.95), for: .navigationBar)
-        .toolbarColorScheme(.light, for: .navigationBar)
+        .preferredColorScheme(appState.preferredColorScheme)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
@@ -100,6 +109,7 @@ struct StockAnalysisView: View {
         }
         .sheet(isPresented: $showBuySheet) {
             BuySheet(stock: stock)
+                .preferredColorScheme(appState.preferredColorScheme)
         }
         .task {
             isLoadingAnalysis = true
@@ -118,6 +128,15 @@ struct StockAnalysisView: View {
                 isEstimated = true
             }
             isLoadingAnalysis = false
+        }
+        .onAppear {
+            // Auto-advance the tutorial from the "tap a stock" step into the analysis walkthrough.
+            guard appState.showTutorial, appState.tutorialStep == tutorialStockTapStep else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    appState.tutorialStep = tutorialStockTapStep + 1
+                }
+            }
         }
     }
 

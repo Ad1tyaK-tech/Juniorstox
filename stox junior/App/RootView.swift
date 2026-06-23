@@ -9,10 +9,11 @@ struct RootView: View {
 
         Group {
             switch appState.authState {
-            case .welcome:  WelcomeView()
-            case .login:    LoginView()
-            case .signup:   CreateAccountView()
-            case .loggedIn: MainDashboardView()
+            case .welcome:        WelcomeView()
+            case .login:          LoginView()
+            case .signup:         CreateAccountView()
+            case .forgotPassword: ForgotPasswordView()
+            case .loggedIn:       MainDashboardView()
             }
         }
         .environmentObject(appState)

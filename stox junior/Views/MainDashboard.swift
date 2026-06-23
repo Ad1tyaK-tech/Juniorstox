@@ -149,6 +149,13 @@ struct MainDashboardView: View {
                     ))
                     .zIndex(10)
             }
+
+            // First-time tutorial — only shown on new account creation
+            if appState.showTutorial {
+                TutorialOverlay(selectedTab: $selectedTab)
+                    .transition(.opacity)
+                    .zIndex(20)
+            }
         }
         .preferredColorScheme(appState.preferredColorScheme)
         .task {

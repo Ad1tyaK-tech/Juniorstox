@@ -201,12 +201,21 @@ struct PortfolioView: View {
                 } label: {
                     Text("Buy All! ⚡")
                         .font(.subheadline.bold())
-                        .foregroundColor(AppColors.textPrimary)
+                        .foregroundColor(AppColors.textTertiary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                         .background(AppColors.highlight)
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
+
+                HStack(spacing: 4) {
+                    Image(systemName: "graduationcap.fill")
+                        .font(.caption2)
+                    Text("Simulated · No real money involved")
+                        .font(.caption2)
+                }
+                .foregroundColor(AppColors.textTertiary)
+                .frame(maxWidth: .infinity)
             }
 
             if let result = quickBuyResult {
