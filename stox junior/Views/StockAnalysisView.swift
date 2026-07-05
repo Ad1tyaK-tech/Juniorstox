@@ -541,7 +541,7 @@ private struct GlossaryRow: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .padding(.vertical, 6)
+            .padding(.vertical, 11)
         }
         .buttonStyle(.plain)
         Divider()

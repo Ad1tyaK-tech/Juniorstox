@@ -52,7 +52,8 @@ struct CreateAccountView: View {
                         TextField("Your Name", text: $fullName)
                             .textInputAutocapitalization(.words)
                             .autocorrectionDisabled(true)
-                            .padding()
+                            .padding(.vertical, 14)
+                            .padding(.horizontal, 16)
                             .background(AppColors.inputBackground)
                             .foregroundColor(AppColors.textPrimary)
                             .cornerRadius(14)
@@ -60,7 +61,8 @@ struct CreateAccountView: View {
                         SecureField("Password (8+ characters)", text: $password)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled(true)
-                            .padding()
+                            .padding(.vertical, 14)
+                            .padding(.horizontal, 16)
                             .background(AppColors.inputBackground)
                             .foregroundColor(AppColors.textPrimary)
                             .cornerRadius(14)
@@ -68,16 +70,17 @@ struct CreateAccountView: View {
                         SecureField("Confirm Password", text: $confirmPassword)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled(true)
-                            .padding()
+                            .padding(.vertical, 14)
+                            .padding(.horizontal, 16)
                             .background(AppColors.inputBackground)
                             .foregroundColor(AppColors.textPrimary)
                             .cornerRadius(14)
 
                         VStack(spacing: 0) {
-                            TextField("Email (optional)", text: $email)
+                            TextField("Email/Keycode (optional)", text: $email)
                                 .textInputAutocapitalization(.never)
                                 .autocorrectionDisabled(true)
-                                .keyboardType(.emailAddress)
+                                .keyboardType(.default)
                                 .padding()
                                 .background(AppColors.inputBackground)
                                 .foregroundColor(AppColors.textPrimary)
@@ -89,7 +92,7 @@ struct CreateAccountView: View {
                                     .foregroundColor(AppColors.textTertiary)
                                     .padding(.top, 1)
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text("Email is optional — we won't share your data.")
+                                    Text("Email is optional. It will only act as a keyword for your account recovery")
                                         .font(.caption2)
                                         .foregroundColor(AppColors.textTertiary)
                                     Text("Without one, a forgotten password means a lost account.")
@@ -139,6 +142,7 @@ struct CreateAccountView: View {
             }
         }
         .onChange(of: fullName) { _, _ in errorMessage = nil }
+        .onChange(of: email)    { _, _ in errorMessage = nil }
     }
 
     private func createAccount() {
@@ -152,12 +156,28 @@ struct CreateAccountView: View {
             return
         }
 
+        // Reject duplicate emails
+        let trimmedEmail = email.trimmingCharacters(in: .whitespaces)
+        if !trimmedEmail.isEmpty {
+            let allAccounts = (try? modelContext.fetch(FetchDescriptor<UserAccount>())) ?? []
+            let emailTaken = allAccounts.contains { acct in
+                guard let data = acct.settingsJSON.data(using: .utf8),
+                      let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      let stored = json["linkedEmail"] as? String
+                else { return false }
+                return !stored.isEmpty && stored.lowercased() == trimmedEmail.lowercased()
+            }
+            if emailTaken {
+                errorMessage = "That email is already linked to another account."
+                return
+            }
+        }
+
         let account = UserAccount(username: name, password: password)
         modelContext.insert(account)
         try? modelContext.save()
 
         appState.loadFrom(account, context: modelContext)
-        let trimmedEmail = email.trimmingCharacters(in: .whitespaces)
         if !trimmedEmail.isEmpty {
             appState.linkedEmail = trimmedEmail
             appState.saveToAccount()

@@ -30,6 +30,7 @@ struct PortfolioView: View {
     @State private var quickBuyBudget: String = "500"
     @State private var quickBuyResult: String? = nil
     @State private var investorMode: QuickBuyMode = .passive
+    @State private var showSellAllAlert: Bool = false
 
     private struct QuickBuyItem: Identifiable {
         let stock: Stock
@@ -80,6 +81,18 @@ struct PortfolioView: View {
                     .font(.caption2)
                     .foregroundColor(AppColors.textTertiary)
                     .frame(maxWidth: .infinity, alignment: .center)
+
+                    Button {
+                        showSellAllAlert = true
+                    } label: {
+                        Label("Sell All Holdings", systemImage: "arrow.down.circle.fill")
+                            .font(.subheadline.bold())
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(AppColors.loss)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
                 }
 
                 PortfolioInsightCard()
@@ -91,6 +104,23 @@ struct PortfolioView: View {
         .background(AppColors.background)
         .sheet(item: $stockToSell) { stock in
             SellSheet(stock: stock)
+        }
+        .alert("Sell Everything?", isPresented: $showSellAllAlert) {
+            Button("Cancel", role: .cancel) {}
+            Button("Sell All", role: .destructive) { sellAllStocks() }
+        } message: {
+            Text("This will sell all your holdings at current market prices.")
+        }
+    }
+
+    private func sellAllStocks() {
+        let snapshot = appState.ownedStocks
+        guard !snapshot.isEmpty else { return }
+        HapticsManager.sell()
+        SoundManager.shared.playKaChing()
+        for stock in snapshot {
+            let s = appState.sharesOwned[stock.realTicker] ?? 0
+            if s > 0 { appState.sellStock(stock, shares: s) }
         }
     }
 
@@ -128,7 +158,7 @@ struct PortfolioView: View {
                         .keyboardType(.decimalPad)
                         .foregroundColor(AppColors.textPrimary)
                 }
-                .padding(10)
+                .padding(13)
                 .background(AppColors.inputBackground)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
 
@@ -149,8 +179,8 @@ struct PortfolioView: View {
                             .font(.caption2)
                     }
                     .foregroundColor(AppColors.textPrimary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, 13)
+                    .padding(.vertical, 13)
                     .background(AppColors.inputBackground)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                 }

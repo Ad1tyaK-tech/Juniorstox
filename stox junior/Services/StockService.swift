@@ -42,10 +42,25 @@ private struct FinnhubQuote: Decodable {
     let pc: Double
 }
 
+// One row returned by the Supabase stock_prices table.
+private struct SupabaseCachedPrice: Decodable {
+    let ticker: String
+    let price: Double
+    let changePercent: Double?
+    let lastUpdated: String
+
+    enum CodingKeys: String, CodingKey {
+        case ticker, price
+        case changePercent = "change_percent"
+        case lastUpdated   = "last_updated"
+    }
+}
+
 enum StockServiceError: Error {
     case badURL
     case badResponse
     case emptyQuote   // Finnhub returns all zeros for an unknown / closed-market ticker
+    case staleCache   // Supabase data is older than the allowed window
 }
 
 struct StockService {
@@ -59,16 +74,109 @@ struct StockService {
     private let maxTick: Double = 10.0
 
     private let apiKey: String
+    private let session: URLSession
 
-    init(apiKey: String = Secrets.finnhubAPIKey) {
+    init(apiKey: String = Secrets.finnhubAPIKey, allowsCellularAccess: Bool = true) {
         self.apiKey = apiKey
+        if allowsCellularAccess {
+            session = .shared
+        } else {
+            let config = URLSessionConfiguration.default
+            config.allowsCellularAccess = false
+            session = URLSession(configuration: config)
+        }
     }
 
-    // Fetches a live quote for every aliased ticker and converts each one into
-    // a Stock with the kid-friendly display name applied.
-    func fetchAllStocks() async -> [Stock] {
+    // Applies a small random tick to each stock in the list — used when live
+    // data can't be fetched so the UI still shows movement on refresh.
+    func applySimulatedTicks(to stocks: [Stock]) -> [Stock] {
+        stocks.map { stock in
+            let directionBias = stock.changePercent >= 0 ? 1.0 : -1.0
+            let tick = Double.random(in: -maxTick...maxTick) * 0.5
+                     + directionBias * Double.random(in: 0...maxTick * 0.5)
+            let newPrice = max(1.0, stock.price + tick)
+            return Stock(
+                symbol: stock.symbol,
+                company: stock.company,
+                realTicker: stock.realTicker,
+                price: newPrice,
+                changePercent: stock.changePercent,
+                trend: stock.trend,
+                slopeRate: stock.slopeRate,
+                maxima: stock.maxima + abs(tick),
+                minima: max(1.0, stock.minima - abs(tick)),
+                floor: stock.floor
+            )
+        }
+    }
 
-        // Run all requests in parallel using a TaskGroup — much faster than serial.
+    // Tries the Supabase cache first; falls back to direct Finnhub calls if
+    // the cache is unavailable, stale, or missing tickers.
+    func fetchAllStocks() async -> [Stock] {
+        if let cached = try? await fetchAllStocksFromCache(),
+           cached.count == stockAliases.count {
+            return cached
+        }
+        return await fetchAllStocksFromFinnhub()
+    }
+
+    // MARK: - Supabase cache
+
+    private func fetchAllStocksFromCache() async throws -> [Stock] {
+        guard let url = URL(string: "\(Secrets.supabaseURL)/rest/v1/stock_prices?select=*") else {
+            throw StockServiceError.badURL
+        }
+        var request = URLRequest(url: url)
+        request.setValue(Secrets.supabaseAnonKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(Secrets.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw StockServiceError.badResponse
+        }
+
+        let rows = try JSONDecoder().decode([SupabaseCachedPrice].self, from: data)
+        guard !rows.isEmpty else { throw StockServiceError.emptyQuote }
+
+        // Reject the entire cache if any row is older than 3 hours.
+        let threeHoursAgo = Date().addingTimeInterval(-3 * 3600)
+        for row in rows {
+            if let date = Self.parseISO8601(row.lastUpdated), date < threeHoursAgo {
+                throw StockServiceError.staleCache
+            }
+        }
+
+        let priceMap = Dictionary(uniqueKeysWithValues: rows.map { ($0.ticker, $0) })
+
+        return stockAliases.compactMap { alias -> Stock? in
+            guard let cached = priceMap[alias.realTicker] else { return nil }
+
+            let changePercent   = cached.changePercent ?? 0
+            let amplifiedChange = changePercent * changeAmplifier
+            let directionBias   = changePercent >= 0 ? 1.0 : -1.0
+            let randomTick      = Double.random(in: -maxTick...maxTick) * 0.5
+                                + directionBias * Double.random(in: 0...maxTick * 0.5)
+            let displayPrice    = max(1.0, cached.price + randomTick)
+
+            return Stock(
+                symbol:        alias.displaySymbol,
+                company:       alias.displayCompany,
+                realTicker:    alias.realTicker,
+                price:         displayPrice,
+                changePercent: amplifiedChange,
+                trend:         amplifiedChange >= 0 ? "Increasing" : "Decreasing",
+                slopeRate:     amplifiedChange / 5,
+                maxima:        cached.price + abs(randomTick),
+                minima:        max(1.0, cached.price - abs(randomTick)),
+                floor:         cached.price * 0.95
+            )
+        }
+    }
+
+    // MARK: - Finnhub fallback
+
+    private func fetchAllStocksFromFinnhub() async -> [Stock] {
         await withTaskGroup(of: Stock?.self) { group in
 
             for alias in stockAliases {
@@ -98,32 +206,32 @@ struct StockService {
     private func fetchStock(for alias: StockAlias) async throws -> Stock {
         let quote = try await fetchQuote(ticker: alias.realTicker)
 
-        let realChange = quote.dp ?? 0
+        let realChange      = quote.dp ?? 0
         let amplifiedChange = realChange * changeAmplifier
 
         // Bias the random tick toward the real day direction so movement feels natural.
         let directionBias = realChange >= 0 ? 1.0 : -1.0
-        let randomTick = Double.random(in: -maxTick...maxTick) * 0.5
-                       + directionBias * Double.random(in: 0...maxTick * 0.5)
-        let displayPrice = max(1.0, quote.c + randomTick)
+        let randomTick    = Double.random(in: -maxTick...maxTick) * 0.5
+                          + directionBias * Double.random(in: 0...maxTick * 0.5)
+        let displayPrice  = max(1.0, quote.c + randomTick)
 
         return Stock(
-            symbol: alias.displaySymbol,
-            company: alias.displayCompany,
-            realTicker: alias.realTicker,
-            price: displayPrice,
+            symbol:        alias.displaySymbol,
+            company:       alias.displayCompany,
+            realTicker:    alias.realTicker,
+            price:         displayPrice,
             changePercent: amplifiedChange,
-            trend: amplifiedChange >= 0 ? "Increasing" : "Decreasing",
-            slopeRate: amplifiedChange / 5,
-            maxima: quote.h + abs(randomTick),
-            minima: max(1.0, quote.l - abs(randomTick)),
-            floor: quote.pc
+            trend:         amplifiedChange >= 0 ? "Increasing" : "Decreasing",
+            slopeRate:     amplifiedChange / 5,
+            maxima:        quote.h + abs(randomTick),
+            minima:        max(1.0, quote.l - abs(randomTick)),
+            floor:         quote.pc
         )
     }
 
     // Returns 90-day analysis for a ticker.
     // Checks UserDefaults first — if today's data is already cached the network is skipped entirely.
-    // Finnhub is only called once per calendar day per ticker.
+    // Alpha Vantage is only called once per calendar day per ticker.
     func fetchPriceAnalysis(for realTicker: String) async throws -> PriceAnalysis {
         let today    = Self.cacheDateFormatter.string(from: Date())
         let cacheKey = "90d.\(realTicker)"
@@ -144,7 +252,7 @@ struct StockService {
         ]
         guard let url = components?.url else { throw StockServiceError.badURL }
 
-        let (data, response) = try await URLSession.shared.data(from: url)
+        let (data, response) = try await session.data(from: url)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw StockServiceError.badResponse
         }
@@ -178,11 +286,11 @@ struct StockService {
         var components = URLComponents(string: "https://finnhub.io/api/v1/quote")
         components?.queryItems = [
             URLQueryItem(name: "symbol", value: ticker),
-            URLQueryItem(name: "token", value: apiKey),
+            URLQueryItem(name: "token",  value: apiKey),
         ]
         guard let url = components?.url else { throw StockServiceError.badURL }
 
-        let (data, response) = try await URLSession.shared.data(from: url)
+        let (data, response) = try await session.data(from: url)
 
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw StockServiceError.badResponse
@@ -194,5 +302,15 @@ struct StockService {
         guard quote.c > 0 else { throw StockServiceError.emptyQuote }
 
         return quote
+    }
+
+    // Handles Supabase's timestamptz format, which may include fractional seconds.
+    private static func parseISO8601(_ string: String) -> Date? {
+        let withFrac = ISO8601DateFormatter()
+        withFrac.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = withFrac.date(from: string) { return date }
+        let plain = ISO8601DateFormatter()
+        plain.formatOptions = [.withInternetDateTime]
+        return plain.date(from: string)
     }
 }

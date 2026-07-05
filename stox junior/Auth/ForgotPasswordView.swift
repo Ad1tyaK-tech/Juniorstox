@@ -64,17 +64,18 @@ struct ForgotPasswordView: View {
                 .font(.largeTitle.bold())
                 .foregroundColor(AppColors.textPrimary)
 
-            Text("Enter the email linked to your account\nand we'll let you reset your password.")
+            Text("Enter the recovery keycode linked to your account.")
                 .font(.subheadline)
                 .foregroundColor(AppColors.textSecondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 30)
 
-            TextField("Email address", text: $email)
+            TextField("Recovery keycode", text: $email)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled(true)
-                .keyboardType(.emailAddress)
-                .padding()
+                .keyboardType(.default)
+                .padding(.vertical, 14)
+                .padding(.horizontal, 16)
                 .background(AppColors.inputBackground)
                 .foregroundColor(AppColors.textPrimary)
                 .cornerRadius(14)
@@ -132,7 +133,8 @@ struct ForgotPasswordView: View {
                 SecureField("New Password (8+ characters)", text: $newPassword)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled(true)
-                    .padding()
+                    .padding(.vertical, 14)
+                    .padding(.horizontal, 16)
                     .background(AppColors.inputBackground)
                     .foregroundColor(AppColors.textPrimary)
                     .cornerRadius(14)
@@ -140,7 +142,8 @@ struct ForgotPasswordView: View {
                 SecureField("Confirm New Password", text: $confirmPassword)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled(true)
-                    .padding()
+                    .padding(.vertical, 14)
+                    .padding(.horizontal, 16)
                     .background(AppColors.inputBackground)
                     .foregroundColor(AppColors.textPrimary)
                     .cornerRadius(14)
@@ -237,7 +240,7 @@ struct ForgotPasswordView: View {
         if let match {
             foundAccount = match
         } else {
-            errorMessage = "No account found with that email.\nIf you didn't add an email when signing up, ask a parent for help."
+            errorMessage = "No account found with that keycode.\nMake sure it matches exactly what you set in Profile → Link Account to Email."
         }
     }
 

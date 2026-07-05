@@ -33,16 +33,16 @@ struct WelcomeView: View {
                     .foregroundColor(.white)
 
                 // App Name
-                Text("Stox")
+                Text("JuniorStox")
                     .font(.system(size: 55, weight: .bold))
                     .foregroundColor(.white)
 
                 // Subtitle
-                Text("A Digital Marketplace")
+                Text("Built For Tomorrow's Investors")
                     .font(.title3)
                     .foregroundColor(.white.opacity(0.8))
 
-                Text("Learn markets, trends, and investing through interactive simulations.")
+                Text("Trade with virtual money, explore live markets, unlock achievements, and build the confidence to invest in the real world.")
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 35)
                     .foregroundColor(.white.opacity(0.75))

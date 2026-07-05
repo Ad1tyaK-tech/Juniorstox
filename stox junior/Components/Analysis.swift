@@ -13,29 +13,15 @@ struct AnalysisRow: View {
 
         VStack(alignment: .leading, spacing: 6) {
 
-            HStack {
-
-                Text(title)
-                    .foregroundColor(AppColors.textSecondary)
-
-                if info != nil {
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            showInfo.toggle()
-                        }
-                    } label: {
-                        Image(systemName: showInfo ? "info.circle.fill" : "info.circle")
-                            .font(.caption)
-                            .foregroundColor(AppColors.accent)
-                    }
-                    .buttonStyle(.plain)
+            if info != nil {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) { showInfo.toggle() }
+                } label: {
+                    rowContent
                 }
-
-                Spacer()
-
-                Text(value)
-                    .foregroundColor(valueColor)
-                    .fontWeight(.semibold)
+                .buttonStyle(.plain)
+            } else {
+                rowContent
             }
 
             if showInfo, let info {
@@ -48,5 +34,25 @@ struct AnalysisRow: View {
                     .cornerRadius(8)
             }
         }
+    }
+
+    private var rowContent: some View {
+        HStack {
+            Text(title)
+                .foregroundColor(AppColors.textSecondary)
+
+            if info != nil {
+                Image(systemName: showInfo ? "info.circle.fill" : "info.circle")
+                    .font(.caption)
+                    .foregroundColor(AppColors.accent)
+            }
+
+            Spacer()
+
+            Text(value)
+                .foregroundColor(valueColor)
+                .fontWeight(.semibold)
+        }
+        .contentShape(Rectangle())
     }
 }

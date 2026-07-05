@@ -1,4 +1,6 @@
 import SwiftUI
+import SwiftData
+import Network
 
 struct ProfileView: View {
 
@@ -11,6 +13,7 @@ struct ProfileView: View {
     @State private var showDeleteConfirm   = false
     @State private var pendingResetBalance: Double = 10_000
     @State private var showFinalReset      = false
+    @State private var showSimulatedWarning = false
 
     var body: some View {
         NavigationStack {
@@ -59,6 +62,11 @@ struct ProfileView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This permanently deletes your account and all data. It cannot be undone.")
+        }
+        .alert("Warning", isPresented: $showSimulatedWarning) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Market changes will only be simulated unless a Wi-Fi connection is available.")
         }
     }
 
@@ -214,12 +222,29 @@ struct ProfileView: View {
 
                 rowDivider
 
-                toggleRow(icon: "antenna.radiowaves.left.and.right.slash", title: "Block Cellular Data",
-                    isOn: Binding(
+                HStack {
+                    Image(systemName: "antenna.radiowaves.left.and.right.slash")
+                        .foregroundColor(AppColors.textSecondary)
+                        .frame(width: 28)
+                    Text("Block Cellular Data")
+                        .foregroundColor(AppColors.textPrimary)
+                    Spacer()
+                    Toggle("", isOn: Binding(
                         get: { appState.blockCellularData },
-                        set: { appState.blockCellularData = $0; appState.saveToAccount() }
-                    )
-                )
+                        set: { newValue in
+                            appState.blockCellularData = newValue
+                            appState.saveToAccount()
+                            if newValue {
+                                let path = NWPathMonitor().currentPath
+                                let hasWifi = path.usesInterfaceType(.wifi)
+                                           || path.usesInterfaceType(.wiredEthernet)
+                                if !hasWifi { showSimulatedWarning = true }
+                            }
+                        }
+                    )).labelsHidden()
+                }
+                .padding(.vertical, 12)
+                .padding(.horizontal, 16)
 
                 rowDivider
 
@@ -542,23 +567,50 @@ private struct LinkEmailSheet: View {
 
     @EnvironmentObject var appState: AppState
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
     @State private var emailInput = ""
+    @State private var errorMessage: String? = nil
+
+    private var isValidFormat: Bool {
+        !emailInput.trimmingCharacters(in: .whitespaces).isEmpty
+    }
 
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 16) {
-                Text("Link your account to an email so you can recover it later.")
-                    .font(.subheadline)
-                    .foregroundColor(AppColors.textSecondary)
+                Text("Set a recovery keycode for your account.")
+                    .font(.subheadline.bold())
+                    .foregroundColor(AppColors.textPrimary)
 
-                TextField("your@email.com", text: $emailInput)
-                    .textContentType(.emailAddress)
-                    .keyboardType(.emailAddress)
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "envelope.badge.shield.half.filled")
+                            .foregroundColor(AppColors.textTertiary)
+                            .font(.caption)
+                            .padding(.top, 1)
+                        Text("This app never sends or accesses any email. Your entry is stored only on this device and used as a keycode to recover your account if you forget your password.")
+                            .font(.caption)
+                            .foregroundColor(AppColors.textSecondary)
+                    }
+                }
+                .padding(12)
+                .background(AppColors.surfaceSecondary)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+
+                TextField("email, word, or phrase you'll remember", text: $emailInput)
+                    .keyboardType(.default)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
                     .padding(14)
                     .background(AppColors.inputBackground)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .onChange(of: emailInput) { _, _ in errorMessage = nil }
+
+                if let error = errorMessage {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundColor(AppColors.loss)
+                }
 
                 Spacer()
             }
@@ -571,15 +623,33 @@ private struct LinkEmailSheet: View {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        appState.linkedEmail = emailInput
-                        appState.saveToAccount()
-                        dismiss()
-                    }
-                    .disabled(emailInput.isEmpty || !emailInput.contains("@"))
+                    Button("Save") { saveEmail() }
+                        .disabled(!isValidFormat)
                 }
             }
         }
         .onAppear { emailInput = appState.linkedEmail }
+    }
+
+    private func saveEmail() {
+        let normalized = emailInput.trimmingCharacters(in: .whitespaces)
+        // Allow saving the user's own current email without a conflict error
+        if normalized.lowercased() != appState.linkedEmail.lowercased() {
+            let allAccounts = (try? modelContext.fetch(FetchDescriptor<UserAccount>())) ?? []
+            let emailTaken = allAccounts.contains { acct in
+                guard let data = acct.settingsJSON.data(using: .utf8),
+                      let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      let stored = json["linkedEmail"] as? String
+                else { return false }
+                return !stored.isEmpty && stored.lowercased() == normalized.lowercased()
+            }
+            if emailTaken {
+                errorMessage = "That email is already linked to another account."
+                return
+            }
+        }
+        appState.linkedEmail = normalized
+        appState.saveToAccount()
+        dismiss()
     }
 }

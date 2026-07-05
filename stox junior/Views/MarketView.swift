@@ -41,12 +41,6 @@ struct MarketView: View {
                         }
                     }
 
-                    if let error = appState.lastRefreshError {
-                        Text(error)
-                            .font(.caption)
-                            .foregroundColor(AppColors.warning)
-                    }
-
                     ForEach(stocksBySector, id: \.sector) { group in
                         SectorSection(
                             sector: group.sector,
@@ -78,7 +72,7 @@ struct MarketView: View {
                 await appState.refreshMarket()
             }
             .task {
-                await appState.refreshMarket()
+                await appState.refreshMarket(silent: true)
             }
             .sheet(item: $stockToBuy) { stock in
                 BuySheet(stock: stock)

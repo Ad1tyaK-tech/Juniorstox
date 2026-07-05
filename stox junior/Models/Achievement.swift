@@ -61,6 +61,9 @@ struct AchievementDef: Identifiable {
         case "marketAddict":
             let windows = [5, 7, 15, 25, 100]
             return "Open the app \(n)× within \(windows[tier.rawValue]) days"
+        case "loyalty":
+            let days = [5, 15, 30, 100, 250]
+            return "Hold \(n)+ shares in one stock for \(days[tier.rawValue])+ days"
         default:                 return ""
         }
     }
@@ -93,5 +96,8 @@ struct AchievementDef: Identifiable {
         .init(id: "marketAddict",     title: "Market Addict",
               icon: "flame.fill",
               thresholds: [15, 30, 50, 100, 500]),
+        .init(id: "loyalty",          title: "Loyalty",
+              icon: "calendar.badge.clock",
+              thresholds: [3, 10, 15, 30, 50]),
     ]
 }

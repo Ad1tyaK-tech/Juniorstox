@@ -16,6 +16,9 @@ struct MainDashboardView: View {
     // Streak popup
     @State private var showStreakPopup = false
 
+    // Custom paging
+    @State private var pageDragOffset: CGFloat = 0
+
     var body: some View {
         ZStack {
             VStack(spacing: 0) {
@@ -86,18 +89,51 @@ struct MainDashboardView: View {
                 Divider()
 
                 // SWIPEABLE CONTENT
-                TabView(selection: $selectedTab) {
-
-                    HomeView(selectedTab: $selectedTab)
-                        .tag(0)
-
-                    MarketView()
-                        .tag(1)
-
-                    PortfolioView()
-                        .tag(2)
+                // Pure-SwiftUI pager so child card gestures (buy/sell swipes) take
+                // priority over the page-switch gesture by SwiftUI's child-wins rule.
+                GeometryReader { proxy in
+                    let w = proxy.size.width
+                    HStack(spacing: 0) {
+                        HomeView(selectedTab: $selectedTab)
+                            .frame(width: w)
+                        MarketView()
+                            .frame(width: w)
+                        PortfolioView()
+                            .frame(width: w)
+                    }
+                    .frame(width: w * 3, alignment: .leading)
+                    .offset(x: -CGFloat(selectedTab) * w + pageDragOffset)
+                    .gesture(
+                        DragGesture(minimumDistance: 50, coordinateSpace: .local)
+                            .onChanged { value in
+                                let dx = value.translation.width
+                                let dy = value.translation.height
+                                // Ignore near-vertical drags (let ScrollView scroll)
+                                guard abs(dx) > abs(dy) * 1.3 else { return }
+                                // Rubber-band at first/last page
+                                if (selectedTab == 0 && dx > 0) || (selectedTab == 2 && dx < 0) {
+                                    pageDragOffset = dx * 0.2
+                                } else {
+                                    pageDragOffset = dx
+                                }
+                            }
+                            .onEnded { value in
+                                let dx = value.translation.width
+                                let dy = value.translation.height
+                                let pdx = value.predictedEndTranslation.width
+                                withAnimation(.spring(response: 0.35, dampingFraction: 0.86)) {
+                                    pageDragOffset = 0
+                                    guard abs(dx) > abs(dy) * 1.3 else { return }
+                                    if (dx < -80 || pdx < -250) && selectedTab < 2 {
+                                        selectedTab += 1
+                                    } else if (dx > 80 || pdx > 250) && selectedTab > 0 {
+                                        selectedTab -= 1
+                                    }
+                                }
+                            }
+                    )
                 }
-                .tabViewStyle(.page(indexDisplayMode: .never))
+                .clipped()
 
                 Divider()
 
@@ -105,15 +141,15 @@ struct MainDashboardView: View {
                 HStack {
 
                     DashboardTabButton(title: "Home", selected: selectedTab == 0) {
-                        selectedTab = 0
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.86)) { selectedTab = 0 }
                     }
 
                     DashboardTabButton(title: "Market", selected: selectedTab == 1) {
-                        selectedTab = 1
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.86)) { selectedTab = 1 }
                     }
 
                     DashboardTabButton(title: "Portfolio", selected: selectedTab == 2) {
-                        selectedTab = 2
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.86)) { selectedTab = 2 }
                     }
                 }
                 .padding()

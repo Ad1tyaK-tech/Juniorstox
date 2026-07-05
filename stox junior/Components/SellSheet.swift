@@ -88,6 +88,21 @@ struct SellSheet: View {
                                     .background(AppColors.inputBackground)
                             }
                             .disabled(shares >= sharesOwned)
+
+                            Rectangle()
+                                .fill(AppColors.cardBorder)
+                                .frame(width: 1, height: 30)
+
+                            Button {
+                                shares = sharesOwned
+                            } label: {
+                                Text("Max")
+                                    .font(.caption.bold())
+                                    .foregroundColor(shares < sharesOwned ? AppColors.textPrimary : AppColors.textTertiary)
+                                    .frame(width: 52, height: 52)
+                                    .background(AppColors.inputBackground)
+                            }
+                            .disabled(shares >= sharesOwned)
                         }
                         .sensoryFeedback(.impact(weight: .light, intensity: 0.7), trigger: shares)
                         .clipShape(RoundedRectangle(cornerRadius: 14))

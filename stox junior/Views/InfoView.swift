@@ -12,6 +12,7 @@ struct InfoView: View {
                     faqSection(title: "Market",        icon: "chart.bar.fill",      items: marketFAQ)
                     faqSection(title: "Portfolio",     icon: "briefcase.fill",      items: portfolioFAQ)
                     faqSection(title: "Achievements",  icon: "trophy.fill",         items: achievementsFAQ)
+                    faqSection(title: "Account & Security", icon: "lock.shield.fill", items: accountFAQ)
                     disclaimer
                 }
                 .padding()
@@ -92,7 +93,7 @@ struct InfoView: View {
         ),
         FAQItem(
             question: "How much money do I start with?",
-            answer: "Every account starts with $10,000 in virtual cash. Your goal is to grow it as high as possible by making smart trades."
+            answer: "Every account starts with $10,000 in virtual cash. Once you're comfortable playing, or if you run out of cash you can reset your account to start with more or less money based on your preferences!"
         ),
         FAQItem(
             question: "What are Gems (💎)?",
@@ -144,6 +145,10 @@ struct InfoView: View {
             question: "Why can't I see some sector groups?",
             answer: "A sector only appears when at least one of its stocks is loaded from the market. If a sector is missing, try pulling down to refresh the page."
         ),
+        FAQItem(
+            question: "Why do prices shift slightly every refresh?",
+            answer: "To keep the app more exciting, Stox Junior adds a small simulated price variation on top of real market data each time you refresh. This makes prices feel more active and dynamic. The direction (up or down) always matches the real market — only the exact dollar amount varies slightly. Real-world prices for these stocks won't show this same tick."
+        ),
     ]
 
     private let portfolioFAQ: [FAQItem] = [
@@ -193,6 +198,29 @@ struct InfoView: View {
         FAQItem(
             question: "Why do some tiers appear hidden?",
             answer: "Locked tiers are hidden on purpose — you only see what you can realistically reach. Once you claim a tier, the next one becomes visible with its progress bar."
+        ),
+    ]
+
+    private let accountFAQ: [FAQItem] = [
+        FAQItem(
+            question: "How do I recover my account if I forget my password?",
+            answer: "If you linked a recovery keycode to your account (found under Profile → Link Account to Email), you can use it on the Forgot Password screen to verify your identity and reset your password. Without a keycode, a forgotten password means the account cannot be recovered — all data is stored locally on your device only."
+        ),
+        FAQItem(
+            question: "What is the account recovery keycode?",
+            answer: "It's an optional string you set in Profile → Link Account to Email. It acts as a second piece of identification — only someone who knows the keycode can trigger a password reset. It is stored only on this device and is never sent anywhere."
+        ),
+        FAQItem(
+            question: "Does the app send or access any emails?",
+            answer: "No — never. Stox Junior has no servers and no internet account system. The 'email' field is purely a local keycode stored on your device. Nothing is transmitted, no mail is ever sent, and we have no access to any email address you enter."
+        ),
+        FAQItem(
+            question: "What happens when I delete my account?",
+            answer: "Deleting your account permanently erases all of your data from this device — your portfolio, trades, achievements, gems, and login record. This cannot be undone. Because everything is local, there is no way to restore a deleted account."
+        ),
+        FAQItem(
+            question: "Can I have multiple accounts on the same device?",
+            answer: "Yes. Each account is stored separately by username. You can log out and create or log into a different account at any time from the Welcome screen."
         ),
     ]
 }

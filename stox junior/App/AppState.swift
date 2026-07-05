@@ -29,7 +29,6 @@ class AppState: ObservableObject {
     @Published var netWorthHistory: [NetWorthSnapshot] = []
 
     @Published var isRefreshing: Bool = false
-    @Published var lastRefreshError: String? = nil
 
     // MARK: - Daily Challenge & Gems
 
@@ -55,6 +54,7 @@ class AppState: ObservableObject {
     @Published var steadySharesBought: Int = 0
     @Published var momentumSharesBought: Int = 0
     @Published var floorSharesBought: Int = 0
+    @Published var holdingStartDates: [String: Date] = [:]
     @Published private var achievementClaimedTiers: Set<String> = []
 
     // MARK: - Streak
@@ -72,7 +72,9 @@ class AppState: ObservableObject {
     @Published var selectedAvatarId: String = ""
     @Published var ownedAvatarIds: Set<String> = []
     @Published var hapticsDisabled: Bool = false
-    @Published var blockCellularData: Bool = false
+    @Published var blockCellularData: Bool = false {
+        didSet { stockService = StockService(allowsCellularAccess: !blockCellularData) }
+    }
     @Published var linkedEmail: String = ""
     @Published var colorSchemePref: String = "light"
 
@@ -89,7 +91,7 @@ class AppState: ObservableObject {
     var currentAccount: UserAccount?
     var lastSnapshotDate: Date = .now
 
-    private let stockService = StockService()
+    private var stockService = StockService()
 
     init() {
         netWorthHistory = [NetWorthSnapshot(date: .now, value: cashBalance)]
@@ -191,6 +193,7 @@ class AppState: ObservableObject {
         steadySharesBought = 0
         momentumSharesBought = 0
         floorSharesBought = 0
+        holdingStartDates = [:]
         achievementClaimedTiers = []
         currentStreak = 0
         longestStreak = 0
@@ -245,6 +248,7 @@ class AppState: ObservableObject {
 
         if !ownedStocks.contains(where: { $0.realTicker == stock.realTicker }) {
             ownedStocks.append(stock)
+            holdingStartDates[stock.realTicker] = .now
         }
 
         // Achievement counters updated before snapshot so they're included in the save
@@ -266,6 +270,7 @@ class AppState: ObservableObject {
         if remaining <= 0 {
             sharesOwned.removeValue(forKey: stock.realTicker)
             purchasePrices.removeValue(forKey: stock.realTicker)
+            holdingStartDates.removeValue(forKey: stock.realTicker)
             ownedStocks.removeAll { $0.realTicker == stock.realTicker }
         } else {
             sharesOwned[stock.realTicker] = remaining
@@ -276,10 +281,9 @@ class AppState: ObservableObject {
 
     // MARK: - Market Refresh
 
-    func refreshMarket() async {
+    func refreshMarket(silent: Bool = false) async {
         guard !isRefreshing else { return }
         isRefreshing = true
-        lastRefreshError = nil
 
         var fetched: [Stock] = []
         for attempt in 0..<3 {
@@ -291,12 +295,11 @@ class AppState: ObservableObject {
         }
 
         if fetched.isEmpty {
-            lastRefreshError = "Couldn't reach the market. Showing sample data."
+            marketStocks = stockService.applySimulatedTicks(to: marketStocks)
             evaluateChallengeProgress()
             saveToAccount()
         } else {
             marketStocks = fetched
-            lastRefreshError = nil
             snapshotNetWorth()
         }
         isRefreshing = false
@@ -430,6 +433,7 @@ class AppState: ObservableObject {
         var steadySharesBought: Int = 0
         var momentumSharesBought: Int = 0
         var floorSharesBought: Int = 0
+        var holdingStartDates: [String: Double] = [:]
         var claimedTiers: [String] = []
         var currentStreak: Int = 0
         var longestStreak: Int = 0
@@ -448,6 +452,7 @@ class AppState: ObservableObject {
         steadySharesBought   = state.steadySharesBought
         momentumSharesBought = state.momentumSharesBought
         floorSharesBought    = state.floorSharesBought
+        holdingStartDates    = state.holdingStartDates.mapValues { Date(timeIntervalSince1970: $0) }
         achievementClaimedTiers = Set(state.claimedTiers)
         currentStreak    = state.currentStreak
         longestStreak    = state.longestStreak
@@ -465,6 +470,7 @@ class AppState: ObservableObject {
             steadySharesBought:   steadySharesBought,
             momentumSharesBought: momentumSharesBought,
             floorSharesBought:    floorSharesBought,
+            holdingStartDates:    holdingStartDates.mapValues { $0.timeIntervalSince1970 },
             claimedTiers:         Array(achievementClaimedTiers),
             currentStreak:        currentStreak,
             longestStreak:        longestStreak,
@@ -490,6 +496,9 @@ class AppState: ObservableObject {
             let (_, windowDays) = marketAddictRequirements(activeTier)
             let cutoff = Date.now.timeIntervalSince1970 - Double(windowDays) * 86400
             return loginTimestamps.filter { $0 >= cutoff }.count
+        case "loyalty":
+            // Progress bar shows max shares held in any current position
+            return ownedStocks.compactMap { sharesOwned[$0.realTicker] }.max() ?? 0
         default:                 return 0
         }
     }
@@ -508,6 +517,8 @@ class AppState: ObservableObject {
         let thresholdMet: Bool
         if id == "marketAddict" {
             thresholdMet = marketAddictTierMet(tier)
+        } else if id == "loyalty" {
+            thresholdMet = loyaltyTierMet(tier)
         } else {
             guard let def = AchievementDef.all.first(where: { $0.id == id }) else { return false }
             thresholdMet = achievementProgress(for: id) >= def.threshold(for: tier)
@@ -598,6 +609,26 @@ class AppState: ObservableObject {
         let (loginTarget, windowDays) = marketAddictRequirements(tier)
         let cutoff = Date.now.timeIntervalSince1970 - Double(windowDays) * 86400
         return loginTimestamps.filter { $0 >= cutoff }.count >= loginTarget
+    }
+
+    // MARK: - Loyalty Helpers
+
+    private func loyaltyRequirements(_ tier: AchievementTier) -> (shares: Int, days: Int) {
+        switch tier {
+        case .amateur:  return (3,  5)
+        case .bronze:   return (10, 15)
+        case .silver:   return (15, 30)
+        case .gold:     return (30, 100)
+        case .platinum: return (50, 250)
+        }
+    }
+
+    private func loyaltyTierMet(_ tier: AchievementTier) -> Bool {
+        let (sharesReq, daysReq) = loyaltyRequirements(tier)
+        return holdingStartDates.contains { ticker, startDate in
+            let daysHeld = Int(Date.now.timeIntervalSince(startDate) / 86400)
+            return (sharesOwned[ticker] ?? 0) >= sharesReq && daysHeld >= daysReq
+        }
     }
 
     // MARK: - Private Helpers
@@ -700,6 +731,7 @@ class AppState: ObservableObject {
         steadySharesBought = 0
         momentumSharesBought = 0
         floorSharesBought = 0
+        holdingStartDates = [:]
         achievementClaimedTiers = []
         saveToAccount()
     }
