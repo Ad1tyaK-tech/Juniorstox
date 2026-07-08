@@ -1,16 +1,15 @@
 import SwiftUI
-import SwiftData
 
 struct LoginView: View {
 
     @EnvironmentObject var appState: AppState
-    @Environment(\.modelContext) private var modelContext
 
     @State private var username = ""
     @State private var password = ""
     @State private var errorMessage: String? = nil
+    @State private var isLoading = false
 
-    private var canAttempt: Bool { !username.isEmpty && !password.isEmpty }
+    private var canAttempt: Bool { !username.isEmpty && !password.isEmpty && !isLoading }
 
     var body: some View {
 
@@ -76,14 +75,19 @@ struct LoginView: View {
                     Button {
                         attemptLogin()
                     } label: {
-                        Text("Log In")
-                            .fontWeight(.bold)
-                            .foregroundColor(canAttempt ? .white : AppColors.textTertiary)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(canAttempt ? AppColors.accent : AppColors.inputBackground)
-                            .cornerRadius(14)
-                            .padding(.horizontal, 30)
+                        Group {
+                            if isLoading {
+                                ProgressView().tint(.white)
+                            } else {
+                                Text("Log In").fontWeight(.bold)
+                                    .foregroundColor(canAttempt ? .white : AppColors.textTertiary)
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(canAttempt ? AppColors.accent : AppColors.inputBackground)
+                        .cornerRadius(14)
+                        .padding(.horizontal, 30)
                     }
                     .disabled(!canAttempt)
 
@@ -105,19 +109,15 @@ struct LoginView: View {
 
     private func attemptLogin() {
         let name = username.trimmingCharacters(in: .whitespaces)
-        let predicate = #Predicate<UserAccount> { $0.username == name }
-        let descriptor = FetchDescriptor<UserAccount>(predicate: predicate)
-
-        guard let account = (try? modelContext.fetch(descriptor))?.first else {
-            errorMessage = "No account found for \"\(name)\". Create one first."
-            return
+        isLoading = true
+        errorMessage = nil
+        Task {
+            do {
+                try await appState.attemptLogin(username: name, password: password)
+            } catch {
+                errorMessage = error.localizedDescription
+                isLoading = false
+            }
         }
-        guard account.passwordMatches(password) else {
-            errorMessage = "Wrong password. Try again."
-            return
-        }
-
-        appState.loadFrom(account, context: modelContext)
-        appState.authState = .loggedIn
     }
 }

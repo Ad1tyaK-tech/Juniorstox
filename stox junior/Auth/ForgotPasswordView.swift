@@ -1,10 +1,8 @@
 import SwiftUI
-import SwiftData
 
 struct ForgotPasswordView: View {
 
     @EnvironmentObject var appState: AppState
-    @Environment(\.modelContext) private var modelContext
 
     @State private var email = ""
     @State private var newPassword = ""
@@ -12,10 +10,11 @@ struct ForgotPasswordView: View {
     @State private var errorMessage: String? = nil
     @State private var foundAccount: UserAccount? = nil
     @State private var didReset = false
+    @State private var isLoading = false
 
     private var isPasswordValid: Bool { newPassword.count >= 8 }
     private var passwordsMatch: Bool { newPassword == confirmPassword && !newPassword.isEmpty }
-    private var canReset: Bool { isPasswordValid && passwordsMatch }
+    private var canReset: Bool { isPasswordValid && passwordsMatch && !isLoading }
 
     var body: some View {
         ZStack {
@@ -47,8 +46,8 @@ struct ForgotPasswordView: View {
                 Spacer()
             }
         }
-        .onChange(of: email) { _, _ in errorMessage = nil }
-        .onChange(of: newPassword) { _, _ in errorMessage = nil }
+        .onChange(of: email)           { _, _ in errorMessage = nil }
+        .onChange(of: newPassword)     { _, _ in errorMessage = nil }
         .onChange(of: confirmPassword) { _, _ in errorMessage = nil }
     }
 
@@ -92,16 +91,21 @@ struct ForgotPasswordView: View {
             Button {
                 findAccount()
             } label: {
-                Text("Find My Account")
-                    .fontWeight(.bold)
-                    .foregroundColor(email.isEmpty ? AppColors.textTertiary : .white)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(email.isEmpty ? AppColors.inputBackground : AppColors.accent)
-                    .cornerRadius(14)
-                    .padding(.horizontal, 30)
+                Group {
+                    if isLoading {
+                        ProgressView().tint(.white)
+                    } else {
+                        Text("Find My Account").fontWeight(.bold)
+                            .foregroundColor(email.isEmpty ? AppColors.textTertiary : .white)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(email.isEmpty ? AppColors.inputBackground : AppColors.accent)
+                .cornerRadius(14)
+                .padding(.horizontal, 30)
             }
-            .disabled(email.isEmpty)
+            .disabled(email.isEmpty || isLoading)
 
             Button {
                 appState.authState = .login
@@ -171,14 +175,19 @@ struct ForgotPasswordView: View {
             Button {
                 saveNewPassword(for: account)
             } label: {
-                Text("Save New Password")
-                    .fontWeight(.bold)
-                    .foregroundColor(canReset ? .white : AppColors.textTertiary)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(canReset ? AppColors.accent : AppColors.inputBackground)
-                    .cornerRadius(14)
-                    .padding(.horizontal, 30)
+                Group {
+                    if isLoading {
+                        ProgressView().tint(.white)
+                    } else {
+                        Text("Save New Password").fontWeight(.bold)
+                            .foregroundColor(canReset ? .white : AppColors.textTertiary)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(canReset ? AppColors.accent : AppColors.inputBackground)
+                .cornerRadius(14)
+                .padding(.horizontal, 30)
             }
             .disabled(!canReset)
         }
@@ -219,35 +228,37 @@ struct ForgotPasswordView: View {
     // MARK: - Logic
 
     private func findAccount() {
-        errorMessage = nil
-        let trimmed = email.trimmingCharacters(in: .whitespaces).lowercased()
+        let trimmed = email.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
-
-        let descriptor = FetchDescriptor<UserAccount>()
-        guard let accounts = try? modelContext.fetch(descriptor) else {
-            errorMessage = "Could not search accounts."
-            return
-        }
-
-        // Email is stored inside settingsJSON — decode just what we need
-        struct EmailCheck: Decodable { var linkedEmail: String = "" }
-        let match = accounts.first { account in
-            guard let data = account.settingsJSON.data(using: .utf8),
-                  let check = try? JSONDecoder().decode(EmailCheck.self, from: data) else { return false }
-            return check.linkedEmail.trimmingCharacters(in: .whitespaces).lowercased() == trimmed
-        }
-
-        if let match {
-            foundAccount = match
-        } else {
-            errorMessage = "No account found with that keycode.\nMake sure it matches exactly what you set in Profile → Link Account to Email."
+        isLoading = true
+        errorMessage = nil
+        Task {
+            do {
+                if let match = try await appState.accountService.findByEmail(trimmed) {
+                    foundAccount = match
+                } else {
+                    errorMessage = "No account found with that keycode.\nMake sure it matches exactly what you set in Profile → Link Account to Email."
+                }
+            } catch {
+                errorMessage = "Could not search accounts. Check your connection."
+            }
+            isLoading = false
         }
     }
 
     private func saveNewPassword(for account: UserAccount) {
         guard canReset else { return }
-        account.passwordHash = UserAccount.hash(newPassword)
-        try? modelContext.save()
-        didReset = true
+        isLoading = true
+        var updated = account
+        updated.passwordHash = UserAccount.hash(newPassword)
+        Task {
+            do {
+                try await appState.accountService.save(updated)
+                didReset = true
+            } catch {
+                errorMessage = "Failed to save new password. Check your connection."
+            }
+            isLoading = false
+        }
     }
 }

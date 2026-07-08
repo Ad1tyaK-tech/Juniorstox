@@ -1,258 +1,65 @@
 import Foundation
 
-// Talks to Finnhub's /quote endpoint.
-// Docs: https://finnhub.io/docs/api/quote
-//
-// Response shape:
-//   c  = current price
-//   d  = change in dollars vs previous close
-//   dp = change in percent vs previous close
-//   h  = day high
-//   l  = day low
-//   o  = day open
-//   pc = previous close
-// Alpha Vantage TIME_SERIES_DAILY response — "compact" output = last 100 trading days.
-private struct AVDailyResponse: Decodable {
-    let timeSeries: [String: AVDailyBar]
-    enum CodingKeys: String, CodingKey {
-        case timeSeries = "Time Series (Daily)"
-    }
-}
-
-private struct AVDailyBar: Decodable {
-    let close: String
-    enum CodingKeys: String, CodingKey {
-        case close = "4. close"
-    }
-}
-
-// Persisted to UserDefaults so the candle endpoint is only hit once per calendar day.
+// Cached to UserDefaults so the chart is stable within a calendar day.
 private struct AnalysisCache: Codable {
     let dateString: String    // "yyyy-MM-dd"
     let closePrices: [Double]
 }
 
-private struct FinnhubQuote: Decodable {
-    let c: Double
-    let d: Double?
-    let dp: Double?
-    let h: Double
-    let l: Double
-    let o: Double
-    let pc: Double
-}
-
-// One row returned by the Supabase price_history table.
-// The workflow upserts this once per weekday; close_prices is a JSONB double array.
-private struct SupabasePriceHistory: Decodable {
-    let ticker: String
-    let closePrices: [Double]
-    let dateString: String
-
-    enum CodingKeys: String, CodingKey {
-        case ticker
-        case closePrices = "close_prices"
-        case dateString  = "date_string"
-    }
-}
-
-// One row returned by the Supabase stock_prices table.
-private struct SupabaseCachedPrice: Decodable {
-    let ticker: String
-    let price: Double
-    let changePercent: Double?
-    let lastUpdated: String
-
-    enum CodingKeys: String, CodingKey {
-        case ticker, price
-        case changePercent = "change_percent"
-        case lastUpdated   = "last_updated"
-    }
-}
-
 enum StockServiceError: Error {
-    case badURL
-    case badResponse
-    case emptyQuote   // Finnhub returns all zeros for an unknown / closed-market ticker
-    case staleCache   // Supabase data is older than the allowed window
+    case emptyQuote
 }
 
 struct StockService {
 
-    // Multiplies the real day-change % for a more exciting display.
-    // Direction stays accurate; magnitude is amplified.
+    // Displayed change is amplified 3× for excitement.
+    // Direction stays true; only the magnitude is exaggerated.
     private let changeAmplifier: Double = 3.0
 
-    // Max random intraday price tick added on each refresh (±$).
-    // Biased toward the day's real direction so it feels natural.
-    private let maxTick: Double = 10.0
+    // Max random intraday tick (±$) added on each pull to simulate live movement.
+    private let maxTick: Double = 8.0
 
-    private let apiKey: String
-    private let session: URLSession
+    // allowsCellularAccess kept for API compatibility with AppState's settings toggle.
+    init(allowsCellularAccess: Bool = true) {}
 
-    init(apiKey: String = Secrets.finnhubAPIKey, allowsCellularAccess: Bool = true) {
-        self.apiKey = apiKey
-        if allowsCellularAccess {
-            session = .shared
-        } else {
-            let config = URLSessionConfiguration.default
-            config.allowsCellularAccess = false
-            session = URLSession(configuration: config)
-        }
+    // MARK: - Public API
+
+    // Returns all stocks for today using a deterministic seed so every user sees
+    // the same direction on the same calendar day. A small random tick is added on
+    // top so prices "move" on each manual refresh.
+    func fetchAllStocks() async -> [Stock] {
+        let today = Self.todayString()
+        return stockAliases.map { syntheticStock(for: $0, dateString: today) }
     }
 
-    // Applies a small random tick to each stock in the list — used when live
-    // data can't be fetched so the UI still shows movement on refresh.
+    // Applies a small random tick to each stock — used by AppState's hourly timer
+    // to keep the UI feeling live without any network call.
     func applySimulatedTicks(to stocks: [Stock]) -> [Stock] {
         stocks.map { stock in
-            let directionBias = stock.changePercent >= 0 ? 1.0 : -1.0
+            let bias = stock.changePercent >= 0 ? 1.0 : -1.0
             let tick = Double.random(in: -maxTick...maxTick) * 0.5
-                     + directionBias * Double.random(in: 0...maxTick * 0.5)
-            let newPrice = max(1.0, stock.price + tick)
+                     + bias * Double.random(in: 0...maxTick * 0.5)
             return Stock(
-                symbol: stock.symbol,
-                company: stock.company,
-                realTicker: stock.realTicker,
-                price: newPrice,
+                symbol:        stock.symbol,
+                company:       stock.company,
+                realTicker:    stock.realTicker,
+                price:         max(1.0, stock.price + tick),
                 changePercent: stock.changePercent,
-                trend: stock.trend,
-                slopeRate: stock.slopeRate,
-                maxima: stock.maxima + abs(tick),
-                minima: max(1.0, stock.minima - abs(tick)),
-                floor: stock.floor
+                trend:         stock.trend,
+                slopeRate:     stock.slopeRate,
+                maxima:        stock.maxima + abs(tick),
+                minima:        max(1.0, stock.minima - abs(tick)),
+                floor:         stock.floor
             )
         }
     }
 
-    // Tries the Supabase cache first; falls back to direct Finnhub calls if
-    // the cache is unavailable, stale, or missing tickers.
-    func fetchAllStocks() async -> [Stock] {
-        if let cached = try? await fetchAllStocksFromCache(),
-           cached.count == stockAliases.count {
-            return cached
-        }
-        return await fetchAllStocksFromFinnhub()
-    }
-
-    // MARK: - Supabase cache
-
-    private func fetchAllStocksFromCache() async throws -> [Stock] {
-        guard let url = URL(string: "\(Secrets.supabaseURL)/rest/v1/stock_prices?select=*") else {
-            throw StockServiceError.badURL
-        }
-        var request = URLRequest(url: url)
-        request.setValue(Secrets.supabaseAnonKey, forHTTPHeaderField: "apikey")
-        request.setValue("Bearer \(Secrets.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw StockServiceError.badResponse
-        }
-
-        let rows = try JSONDecoder().decode([SupabaseCachedPrice].self, from: data)
-        guard !rows.isEmpty else { throw StockServiceError.emptyQuote }
-
-        // Reject the entire cache if any row is older than 3 hours.
-        let threeHoursAgo = Date().addingTimeInterval(-3 * 3600)
-        for row in rows {
-            if let date = Self.parseISO8601(row.lastUpdated), date < threeHoursAgo {
-                throw StockServiceError.staleCache
-            }
-        }
-
-        let priceMap = Dictionary(uniqueKeysWithValues: rows.map { ($0.ticker, $0) })
-
-        return stockAliases.compactMap { alias -> Stock? in
-            guard let cached = priceMap[alias.realTicker] else { return nil }
-
-            let changePercent   = cached.changePercent ?? 0
-            let amplifiedChange = changePercent * changeAmplifier
-            let directionBias   = changePercent >= 0 ? 1.0 : -1.0
-            let randomTick      = Double.random(in: -maxTick...maxTick) * 0.5
-                                + directionBias * Double.random(in: 0...maxTick * 0.5)
-            let displayPrice    = max(1.0, cached.price + randomTick)
-
-            return Stock(
-                symbol:        alias.displaySymbol,
-                company:       alias.displayCompany,
-                realTicker:    alias.realTicker,
-                price:         displayPrice,
-                changePercent: amplifiedChange,
-                trend:         amplifiedChange >= 0 ? "Increasing" : "Decreasing",
-                slopeRate:     amplifiedChange / 5,
-                maxima:        cached.price + abs(randomTick),
-                minima:        max(1.0, cached.price - abs(randomTick)),
-                floor:         cached.price * 0.95
-            )
-        }
-    }
-
-    // MARK: - Finnhub fallback
-
-    private func fetchAllStocksFromFinnhub() async -> [Stock] {
-        await withTaskGroup(of: Stock?.self) { group in
-
-            for alias in stockAliases {
-                group.addTask {
-                    do {
-                        return try await fetchStock(for: alias)
-                    } catch {
-                        print("[StockService] fetch failed for \(alias.realTicker): \(error)")
-                        return nil
-                    }
-                }
-            }
-
-            var results: [Stock] = []
-            for await stock in group {
-                if let stock { results.append(stock) }
-            }
-            // Preserve the original order from stockAliases for a stable UI.
-            return results.sorted { lhs, rhs in
-                let lhsIndex = stockAliases.firstIndex { $0.realTicker == lhs.realTicker } ?? 0
-                let rhsIndex = stockAliases.firstIndex { $0.realTicker == rhs.realTicker } ?? 0
-                return lhsIndex < rhsIndex
-            }
-        }
-    }
-
-    private func fetchStock(for alias: StockAlias) async throws -> Stock {
-        let quote = try await fetchQuote(ticker: alias.realTicker)
-
-        let realChange      = quote.dp ?? 0
-        let amplifiedChange = realChange * changeAmplifier
-
-        // Bias the random tick toward the real day direction so movement feels natural.
-        let directionBias = realChange >= 0 ? 1.0 : -1.0
-        let randomTick    = Double.random(in: -maxTick...maxTick) * 0.5
-                          + directionBias * Double.random(in: 0...maxTick * 0.5)
-        let displayPrice  = max(1.0, quote.c + randomTick)
-
-        return Stock(
-            symbol:        alias.displaySymbol,
-            company:       alias.displayCompany,
-            realTicker:    alias.realTicker,
-            price:         displayPrice,
-            changePercent: amplifiedChange,
-            trend:         amplifiedChange >= 0 ? "Increasing" : "Decreasing",
-            slopeRate:     amplifiedChange / 5,
-            maxima:        quote.h + abs(randomTick),
-            minima:        max(1.0, quote.l - abs(randomTick)),
-            floor:         quote.pc
-        )
-    }
-
-    // Returns 90-day analysis for a ticker.
-    // Priority order:
-    //   1. On-device UserDefaults cache (instant, skips all network)
-    //   2. Supabase price_history table (populated once per day by the GitHub Actions workflow)
-    //   3. Direct Alpha Vantage call (last resort — burns one of the 25 free req/day)
+    // Returns a 90-day PriceAnalysis for a ticker.
+    // Caches to UserDefaults so the chart is generated only once per calendar day.
     func fetchPriceAnalysis(for realTicker: String) async throws -> PriceAnalysis {
-        let today    = Self.cacheDateFormatter.string(from: Date())
+        let today    = Self.todayString()
         let cacheKey = "90d.\(realTicker)"
 
-        // 1. On-device cache.
         if let raw    = UserDefaults.standard.data(forKey: cacheKey),
            let cached = try? JSONDecoder().decode(AnalysisCache.self, from: raw),
            cached.dateString == today,
@@ -260,39 +67,18 @@ struct StockService {
             return analysis
         }
 
-        // 2. Supabase — accepts data up to 4 days old so weekends are covered
-        //    without falling through to AV (markets are closed, data doesn't change).
-        if let closes = try? await fetchPriceHistoryFromSupabase(ticker: realTicker) {
-            if let encoded = try? JSONEncoder().encode(AnalysisCache(dateString: today, closePrices: closes)) {
-                UserDefaults.standard.set(encoded, forKey: cacheKey)
-            }
-            if let analysis = PriceAnalyzer.analyze(closePrices: closes) {
-                return analysis
-            }
-        }
+        let base        = basePriceFor(realTicker)
+        let dailyReturn = seededDailyReturn(ticker: realTicker, dateString: today)
+        let seeded      = max(1.0, base * (1.0 + dailyReturn))
+        let intraRange  = seeded * 0.015
 
-        // 3. Direct Alpha Vantage call — only reached if Supabase is empty or the
-        //    workflow hasn't run yet (e.g. first deploy, manual test).
-        var components = URLComponents(string: "https://www.alphavantage.co/query")
-        components?.queryItems = [
-            URLQueryItem(name: "function",   value: "TIME_SERIES_DAILY"),
-            URLQueryItem(name: "symbol",     value: realTicker),
-            URLQueryItem(name: "outputsize", value: "compact"),
-            URLQueryItem(name: "apikey",     value: Secrets.alphaadvantageAPIKey),
-        ]
-        guard let url = components?.url else { throw StockServiceError.badURL }
-
-        let (data, response) = try await session.data(from: url)
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw StockServiceError.badResponse
-        }
-
-        let avResponse = try JSONDecoder().decode(AVDailyResponse.self, from: data)
-        let closes = avResponse.timeSeries
-            .sorted { $0.key < $1.key }   // "yyyy-MM-dd" sorts lexicographically = chronologically
-            .suffix(90)
-            .compactMap { Double($0.value.close) }
-        guard !closes.isEmpty else { throw StockServiceError.emptyQuote }
+        let closes = PriceAnalyzer.syntheticPrices(
+            currentPrice:  seeded,
+            changePercent: dailyReturn * 100,
+            dayHigh:       seeded + intraRange,
+            dayLow:        max(1.0, seeded - intraRange),
+            ticker:        realTicker
+        )
 
         if let encoded = try? JSONEncoder().encode(AnalysisCache(dateString: today, closePrices: closes)) {
             UserDefaults.standard.set(encoded, forKey: cacheKey)
@@ -304,72 +90,63 @@ struct StockService {
         return analysis
     }
 
-    // Fetches close prices from the Supabase price_history table.
-    // Accepts data up to 4 days old — covers Mon morning (uses Fri data) and full weekends.
-    private func fetchPriceHistoryFromSupabase(ticker: String) async throws -> [Double] {
-        guard let url = URL(string: "\(Secrets.supabaseURL)/rest/v1/price_history?select=close_prices,date_string&ticker=eq.\(ticker)") else {
-            throw StockServiceError.badURL
-        }
-        var request = URLRequest(url: url)
-        request.setValue(Secrets.supabaseAnonKey, forHTTPHeaderField: "apikey")
-        request.setValue("Bearer \(Secrets.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
+    // MARK: - Synthetic generation
 
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw StockServiceError.badResponse
-        }
+    // Builds one Stock seeded by (ticker, date). The seeded price determines
+    // direction and magnitude; a small random tick on top varies each call.
+    private func syntheticStock(for alias: StockAlias, dateString: String) -> Stock {
+        let base        = basePriceFor(alias.realTicker)
+        let dailyReturn = seededDailyReturn(ticker: alias.realTicker, dateString: dateString)
+        let amplified   = dailyReturn * 100 * changeAmplifier
+        let seeded      = max(1.0, base * (1.0 + dailyReturn))
+        let intraRange  = seeded * 0.015
 
-        let rows = try JSONDecoder().decode([SupabasePriceHistory].self, from: data)
-        guard let row = rows.first else { throw StockServiceError.emptyQuote }
+        // Yesterday's seeded price acts as the "floor" (support level).
+        let yesterdayReturn = seededDailyReturn(ticker: alias.realTicker, dateString: Self.yesterdayString())
+        let floor = max(1.0, base * (1.0 + yesterdayReturn))
 
-        // Reject data older than 4 days (handles weekends; rejects a genuinely stale table).
-        let fourDaysAgo = Date().addingTimeInterval(-4 * 24 * 3600)
-        guard let rowDate = Self.cacheDateFormatter.date(from: row.dateString),
-              rowDate >= fourDaysAgo else {
-            throw StockServiceError.staleCache
-        }
+        let bias = dailyReturn >= 0 ? 1.0 : -1.0
+        let tick = Double.random(in: -maxTick...maxTick) * 0.3
+                 + bias * Double.random(in: 0...maxTick * 0.3)
+        let displayPrice = max(1.0, seeded + tick)
 
-        guard !row.closePrices.isEmpty else { throw StockServiceError.emptyQuote }
-        return row.closePrices
+        return Stock(
+            symbol:        alias.displaySymbol,
+            company:       alias.displayCompany,
+            realTicker:    alias.realTicker,
+            price:         displayPrice,
+            changePercent: amplified,
+            trend:         amplified >= 0 ? "Increasing" : "Decreasing",
+            slopeRate:     amplified / 5,
+            maxima:        seeded + intraRange,
+            minima:        max(1.0, seeded - intraRange),
+            floor:         floor
+        )
     }
 
-    private static let cacheDateFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
-        return f
-    }()
-
-    private func fetchQuote(ticker: String) async throws -> FinnhubQuote {
-
-        var components = URLComponents(string: "https://finnhub.io/api/v1/quote")
-        components?.queryItems = [
-            URLQueryItem(name: "symbol", value: ticker),
-            URLQueryItem(name: "token",  value: apiKey),
-        ]
-        guard let url = components?.url else { throw StockServiceError.badURL }
-
-        let (data, response) = try await session.data(from: url)
-
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw StockServiceError.badResponse
-        }
-
-        let quote = try JSONDecoder().decode(FinnhubQuote.self, from: data)
-
-        // Finnhub returns c=0 for invalid symbols or rate-limited responses.
-        guard quote.c > 0 else { throw StockServiceError.emptyQuote }
-
-        return quote
+    // LCG + Box-Muller → N(0, 0.015).
+    // Seeded by ticker + date so all users see the same price direction on the same day.
+    // Daily vol of 1.5% is realistic for large-cap stocks; amplified 3× for display.
+    private func seededDailyReturn(ticker: String, dateString: String) -> Double {
+        var s = (ticker + dateString).unicodeScalars
+            .reduce(UInt64(0)) { $0 &* 31 &+ UInt64($1.value) } | 1
+        s = s &* 6364136223846793005 &+ 1442695040888963407
+        let u1 = max(1e-10, Double(s >> 33) / Double(UInt64(1) << 31))
+        s = s &* 6364136223846793005 &+ 1442695040888963407
+        let u2 = Double(s >> 33) / Double(UInt64(1) << 31)
+        return sqrt(-2.0 * log(u1)) * cos(2.0 * .pi * u2) * 0.015
     }
 
-    // Handles Supabase's timestamptz format, which may include fractional seconds.
-    private static func parseISO8601(_ string: String) -> Date? {
-        let withFrac = ISO8601DateFormatter()
-        withFrac.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = withFrac.date(from: string) { return date }
-        let plain = ISO8601DateFormatter()
-        plain.formatOptions = [.withInternetDateTime]
-        return plain.date(from: string)
+    private func basePriceFor(_ realTicker: String) -> Double {
+        sampleStocks.first { $0.realTicker == realTicker }?.price ?? 100.0
+    }
+
+    private static func todayString() -> String {
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; return f.string(from: .now)
+    }
+
+    private static func yesterdayString() -> String {
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
+        return f.string(from: Calendar.current.date(byAdding: .day, value: -1, to: .now)!)
     }
 }

@@ -1,5 +1,4 @@
 import SwiftUI
-import SwiftData
 import Network
 
 struct ProfileView: View {
@@ -567,7 +566,6 @@ private struct LinkEmailSheet: View {
 
     @EnvironmentObject var appState: AppState
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
     @State private var emailInput = ""
     @State private var errorMessage: String? = nil
 
@@ -633,23 +631,15 @@ private struct LinkEmailSheet: View {
 
     private func saveEmail() {
         let normalized = emailInput.trimmingCharacters(in: .whitespaces)
-        // Allow saving the user's own current email without a conflict error
-        if normalized.lowercased() != appState.linkedEmail.lowercased() {
-            let allAccounts = (try? modelContext.fetch(FetchDescriptor<UserAccount>())) ?? []
-            let emailTaken = allAccounts.contains { acct in
-                guard let data = acct.settingsJSON.data(using: .utf8),
-                      let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                      let stored = json["linkedEmail"] as? String
-                else { return false }
-                return !stored.isEmpty && stored.lowercased() == normalized.lowercased()
-            }
-            if emailTaken {
+        Task {
+            if normalized.lowercased() != appState.linkedEmail.lowercased(),
+               (try? await appState.accountService.isEmailTaken(normalized)) == true {
                 errorMessage = "That email is already linked to another account."
                 return
             }
+            appState.linkedEmail = normalized
+            appState.saveToAccount()
+            dismiss()
         }
-        appState.linkedEmail = normalized
-        appState.saveToAccount()
-        dismiss()
     }
 }

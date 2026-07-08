@@ -1,5 +1,4 @@
 import SwiftUI
-import SwiftData
 
 @main
 struct StoxApp: App {
@@ -7,6 +6,5 @@ struct StoxApp: App {
         WindowGroup {
             RootView()
         }
-        .modelContainer(for: UserAccount.self)
     }
 }

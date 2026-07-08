@@ -1,5 +1,4 @@
 import SwiftUI
-import SwiftData
 import Combine
 
 struct NetWorthSnapshot: Identifiable, Codable {
@@ -87,11 +86,10 @@ class AppState: ObservableObject {
         }
     }
 
-    // SwiftData — set after login, nil when logged out
-    var modelContext: ModelContext?
     var currentAccount: UserAccount?
     var lastSnapshotDate: Date = .now
 
+    let accountService = AccountService()
     private var stockService = StockService()
 
     init() {
@@ -108,9 +106,8 @@ class AppState: ObservableObject {
     // MARK: - Persistence
 
     /// Populate AppState from a saved account and kick off AFK catch-up.
-    func loadFrom(_ account: UserAccount, context: ModelContext) {
+    func loadFrom(_ account: UserAccount) {
         currentAccount = account
-        modelContext = context
         fullName = account.username
         cashBalance = account.cashBalance
         startingBalance = account.startingBalance
@@ -147,19 +144,43 @@ class AppState: ObservableObject {
         applyAfkCatchUp()
     }
 
-    /// Write current state back to the SwiftData model and persist.
+    /// Write current state to Supabase (fire-and-forget — never blocks the UI).
     func saveToAccount() {
-        guard let account = currentAccount, let ctx = modelContext else { return }
-        account.cashBalance = cashBalance
-        account.startingBalance = startingBalance
-        account.lastSnapshotDate = lastSnapshotDate
-        account.sharesOwnedJSON = encode(sharesOwned) ?? "{}"
-        account.purchasePricesJSON = encode(purchasePrices) ?? "{}"
+        guard var account = currentAccount else { return }
+        account.cashBalance         = cashBalance
+        account.startingBalance     = startingBalance
+        account.lastSnapshotDate    = lastSnapshotDate
+        account.sharesOwnedJSON     = encode(sharesOwned) ?? "{}"
+        account.purchasePricesJSON  = encode(purchasePrices) ?? "{}"
         account.netWorthHistoryJSON = encode(netWorthHistory) ?? "[]"
-        account.dailyChallengeJSON = encodeChallengeState()
-        account.achievementsJSON = encodeAchievementsState()
-        account.settingsJSON = encodeSettingsState()
-        try? ctx.save()
+        account.dailyChallengeJSON  = encodeChallengeState()
+        account.achievementsJSON    = encodeAchievementsState()
+        account.settingsJSON        = encodeSettingsState()
+        currentAccount = account
+        Task { try? await accountService.save(account) }
+    }
+
+    // MARK: - Supabase Auth helpers (called by auth views)
+
+    func attemptLogin(username: String, password: String) async throws {
+        let account = try await accountService.login(username: username, password: password)
+        loadFrom(account)
+        authState = .loggedIn
+    }
+
+    func attemptCreateAccount(username: String, password: String, email: String) async throws {
+        if !email.isEmpty, try await accountService.isEmailTaken(email) {
+            throw AccountError.emailTaken
+        }
+        let account = try await accountService.createAccount(username: username, password: password)
+        loadFrom(account)
+        if !email.isEmpty {
+            linkedEmail = email
+            saveToAccount()
+        }
+        showTutorial = true
+        tutorialStep = 0
+        authState = .loggedIn
     }
 
     /// Called from scenePhase .active — fills missed hourly slots and records the open when logged in.
@@ -173,7 +194,6 @@ class AppState: ObservableObject {
     func logout() {
         saveToAccount()
         currentAccount = nil
-        modelContext = nil
         fullName = ""
         cashBalance = 10_000
         startingBalance = 10_000
@@ -745,10 +765,10 @@ class AppState: ObservableObject {
     // MARK: - Account Deletion
 
     func deleteAccount() {
-        guard let account = currentAccount, let ctx = modelContext else { return }
-        currentAccount = nil  // prevent saveToAccount() inside logout() from writing to deleted model
-        ctx.delete(account)
-        try? ctx.save()
+        guard let account = currentAccount else { return }
+        let username = account.username
+        currentAccount = nil  // prevent saveToAccount() inside logout() from writing to deleted row
+        Task { try? await accountService.delete(username: username) }
         logout()
     }
 }

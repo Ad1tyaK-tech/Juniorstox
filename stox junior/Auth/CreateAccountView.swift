@@ -1,22 +1,21 @@
 import SwiftUI
-import SwiftData
 
 struct CreateAccountView: View {
 
     @EnvironmentObject var appState: AppState
-    @Environment(\.modelContext) private var modelContext
 
     @State private var fullName = ""
     @State private var email = ""
     @State private var password = ""
     @State private var confirmPassword = ""
     @State private var errorMessage: String? = nil
+    @State private var isLoading = false
 
     private var isPasswordValid: Bool { password.count >= 8 }
     private var passwordsMatch: Bool { password == confirmPassword && !password.isEmpty }
     private var canCreate: Bool {
         !fullName.trimmingCharacters(in: .whitespaces).isEmpty &&
-        isPasswordValid && passwordsMatch
+        isPasswordValid && passwordsMatch && !isLoading
     }
 
     var body: some View {
@@ -126,14 +125,19 @@ struct CreateAccountView: View {
                     }
 
                     Button { createAccount() } label: {
-                        Text("Create Profile")
-                            .fontWeight(.bold)
-                            .foregroundColor(canCreate ? .white : AppColors.textTertiary)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(canCreate ? AppColors.accent : AppColors.inputBackground)
-                            .cornerRadius(18)
-                            .padding(.horizontal, 30)
+                        Group {
+                            if isLoading {
+                                ProgressView().tint(.white)
+                            } else {
+                                Text("Create Profile").fontWeight(.bold)
+                                    .foregroundColor(canCreate ? .white : AppColors.textTertiary)
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(canCreate ? AppColors.accent : AppColors.inputBackground)
+                        .cornerRadius(18)
+                        .padding(.horizontal, 30)
                     }
                     .disabled(!canCreate)
 
@@ -146,44 +150,17 @@ struct CreateAccountView: View {
     }
 
     private func createAccount() {
-        let name = fullName.trimmingCharacters(in: .whitespaces)
-
-        // Reject duplicate usernames
-        let predicate = #Predicate<UserAccount> { $0.username == name }
-        let descriptor = FetchDescriptor<UserAccount>(predicate: predicate)
-        if let existing = try? modelContext.fetch(descriptor), !existing.isEmpty {
-            errorMessage = "The name \"\(name)\" is already taken. Try a different name."
-            return
-        }
-
-        // Reject duplicate emails
-        let trimmedEmail = email.trimmingCharacters(in: .whitespaces)
-        if !trimmedEmail.isEmpty {
-            let allAccounts = (try? modelContext.fetch(FetchDescriptor<UserAccount>())) ?? []
-            let emailTaken = allAccounts.contains { acct in
-                guard let data = acct.settingsJSON.data(using: .utf8),
-                      let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                      let stored = json["linkedEmail"] as? String
-                else { return false }
-                return !stored.isEmpty && stored.lowercased() == trimmedEmail.lowercased()
-            }
-            if emailTaken {
-                errorMessage = "That email is already linked to another account."
-                return
+        let name    = fullName.trimmingCharacters(in: .whitespaces)
+        let trimEmail = email.trimmingCharacters(in: .whitespaces)
+        isLoading = true
+        errorMessage = nil
+        Task {
+            do {
+                try await appState.attemptCreateAccount(username: name, password: password, email: trimEmail)
+            } catch {
+                errorMessage = error.localizedDescription
+                isLoading = false
             }
         }
-
-        let account = UserAccount(username: name, password: password)
-        modelContext.insert(account)
-        try? modelContext.save()
-
-        appState.loadFrom(account, context: modelContext)
-        if !trimmedEmail.isEmpty {
-            appState.linkedEmail = trimmedEmail
-            appState.saveToAccount()
-        }
-        appState.showTutorial = true
-        appState.tutorialStep = 0
-        appState.authState = .loggedIn
     }
 }

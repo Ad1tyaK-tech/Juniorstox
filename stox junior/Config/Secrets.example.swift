@@ -6,8 +6,6 @@
 //   3. Replace each placeholder with your real keys.
 //
 // Where to get each key:
-//   - finnhubAPIKey        → finnhub.io → Dashboard
-//   - alphaadvantageAPIKey → alphavantage.co → "Get free API key"
 //   - supabaseURL          → Supabase project → Settings → API → Project URL
 //   - supabaseAnonKey      → Supabase project → Settings → API → anon public key
 //
@@ -20,9 +18,6 @@
 import Foundation
 
 enum Secrets {
-    static let finnhubAPIKey        = "REPLACE_WITH_YOUR_FINNHUB_KEY"
-    static let alphaadvantageAPIKey = "REPLACE_WITH_YOUR_ALPHAVANTAGE_KEY"
-
     // Supabase — read-only anon key is safe in the app binary.
     // NEVER put the service_role key here.
     static let supabaseURL     = "https://YOUR_PROJECT_REF.supabase.co"
