@@ -42,6 +42,20 @@ private struct FinnhubQuote: Decodable {
     let pc: Double
 }
 
+// One row returned by the Supabase price_history table.
+// The workflow upserts this once per weekday; close_prices is a JSONB double array.
+private struct SupabasePriceHistory: Decodable {
+    let ticker: String
+    let closePrices: [Double]
+    let dateString: String
+
+    enum CodingKeys: String, CodingKey {
+        case ticker
+        case closePrices = "close_prices"
+        case dateString  = "date_string"
+    }
+}
+
 // One row returned by the Supabase stock_prices table.
 private struct SupabaseCachedPrice: Decodable {
     let ticker: String
@@ -230,12 +244,15 @@ struct StockService {
     }
 
     // Returns 90-day analysis for a ticker.
-    // Checks UserDefaults first — if today's data is already cached the network is skipped entirely.
-    // Alpha Vantage is only called once per calendar day per ticker.
+    // Priority order:
+    //   1. On-device UserDefaults cache (instant, skips all network)
+    //   2. Supabase price_history table (populated once per day by the GitHub Actions workflow)
+    //   3. Direct Alpha Vantage call (last resort — burns one of the 25 free req/day)
     func fetchPriceAnalysis(for realTicker: String) async throws -> PriceAnalysis {
         let today    = Self.cacheDateFormatter.string(from: Date())
         let cacheKey = "90d.\(realTicker)"
 
+        // 1. On-device cache.
         if let raw    = UserDefaults.standard.data(forKey: cacheKey),
            let cached = try? JSONDecoder().decode(AnalysisCache.self, from: raw),
            cached.dateString == today,
@@ -243,6 +260,19 @@ struct StockService {
             return analysis
         }
 
+        // 2. Supabase — accepts data up to 4 days old so weekends are covered
+        //    without falling through to AV (markets are closed, data doesn't change).
+        if let closes = try? await fetchPriceHistoryFromSupabase(ticker: realTicker) {
+            if let encoded = try? JSONEncoder().encode(AnalysisCache(dateString: today, closePrices: closes)) {
+                UserDefaults.standard.set(encoded, forKey: cacheKey)
+            }
+            if let analysis = PriceAnalyzer.analyze(closePrices: closes) {
+                return analysis
+            }
+        }
+
+        // 3. Direct Alpha Vantage call — only reached if Supabase is empty or the
+        //    workflow hasn't run yet (e.g. first deploy, manual test).
         var components = URLComponents(string: "https://www.alphavantage.co/query")
         components?.queryItems = [
             URLQueryItem(name: "function",   value: "TIME_SERIES_DAILY"),
@@ -264,7 +294,6 @@ struct StockService {
             .compactMap { Double($0.value.close) }
         guard !closes.isEmpty else { throw StockServiceError.emptyQuote }
 
-        // Persist so every open today skips the network call.
         if let encoded = try? JSONEncoder().encode(AnalysisCache(dateString: today, closePrices: closes)) {
             UserDefaults.standard.set(encoded, forKey: cacheKey)
         }
@@ -273,6 +302,36 @@ struct StockService {
             throw StockServiceError.emptyQuote
         }
         return analysis
+    }
+
+    // Fetches close prices from the Supabase price_history table.
+    // Accepts data up to 4 days old — covers Mon morning (uses Fri data) and full weekends.
+    private func fetchPriceHistoryFromSupabase(ticker: String) async throws -> [Double] {
+        guard let url = URL(string: "\(Secrets.supabaseURL)/rest/v1/price_history?select=close_prices,date_string&ticker=eq.\(ticker)") else {
+            throw StockServiceError.badURL
+        }
+        var request = URLRequest(url: url)
+        request.setValue(Secrets.supabaseAnonKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(Secrets.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw StockServiceError.badResponse
+        }
+
+        let rows = try JSONDecoder().decode([SupabasePriceHistory].self, from: data)
+        guard let row = rows.first else { throw StockServiceError.emptyQuote }
+
+        // Reject data older than 4 days (handles weekends; rejects a genuinely stale table).
+        let fourDaysAgo = Date().addingTimeInterval(-4 * 24 * 3600)
+        guard let rowDate = Self.cacheDateFormatter.date(from: row.dateString),
+              rowDate >= fourDaysAgo else {
+            throw StockServiceError.staleCache
+        }
+
+        guard !row.closePrices.isEmpty else { throw StockServiceError.emptyQuote }
+        return row.closePrices
     }
 
     private static let cacheDateFormatter: DateFormatter = {

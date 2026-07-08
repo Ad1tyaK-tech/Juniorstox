@@ -13,6 +13,7 @@ final class UserAccount {
     var netWorthHistoryJSON: String
     var lastSnapshotDate: Date
     var createdDate: Date
+    var startingBalance: Double = 10_000
     var dailyChallengeJSON: String = "{}"
     var achievementsJSON: String = "{}"
     var settingsJSON: String = "{}"

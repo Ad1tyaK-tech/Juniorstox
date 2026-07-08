@@ -17,6 +17,7 @@ class AppState: ObservableObject {
     @Published var authState: AuthState = .welcome
 
     @Published var cashBalance: Double = 10_000
+    @Published var startingBalance: Double = 10_000
     @Published var fullName: String = ""
     @Published var profileImage: UIImage? = nil
 
@@ -36,7 +37,7 @@ class AppState: ObservableObject {
     @Published var challengeProgress: Int = 0
     @Published var challengeClaimed: Bool = false
 
-    var todayChallenge: DailyChallenge { DailyChallenge.forToday() }
+    var todayChallenge: DailyChallenge { DailyChallenge.forToday(startingBalance: startingBalance) }
     var isChallengeComplete: Bool { challengeProgress >= todayChallenge.target }
 
     private var challengeDateKey: String = ""
@@ -112,6 +113,7 @@ class AppState: ObservableObject {
         modelContext = context
         fullName = account.username
         cashBalance = account.cashBalance
+        startingBalance = account.startingBalance
         lastSnapshotDate = account.lastSnapshotDate
 
         if let data = account.sharesOwnedJSON.data(using: .utf8),
@@ -127,7 +129,7 @@ class AppState: ObservableObject {
            !history.isEmpty {
             netWorthHistory = history
         } else {
-            netWorthHistory = [NetWorthSnapshot(date: account.createdDate, value: 10_000)]
+            netWorthHistory = [NetWorthSnapshot(date: account.createdDate, value: account.startingBalance)]
         }
 
         // Rebuild the in-memory stock list from persisted tickers
@@ -149,6 +151,7 @@ class AppState: ObservableObject {
     func saveToAccount() {
         guard let account = currentAccount, let ctx = modelContext else { return }
         account.cashBalance = cashBalance
+        account.startingBalance = startingBalance
         account.lastSnapshotDate = lastSnapshotDate
         account.sharesOwnedJSON = encode(sharesOwned) ?? "{}"
         account.purchasePricesJSON = encode(purchasePrices) ?? "{}"
@@ -173,6 +176,7 @@ class AppState: ObservableObject {
         modelContext = nil
         fullName = ""
         cashBalance = 10_000
+        startingBalance = 10_000
         ownedStocks = []
         sharesOwned = [:]
         purchasePrices = [:]
@@ -356,9 +360,10 @@ class AppState: ObservableObject {
     // Recomputes progress for challenges driven by current state (not discrete events).
     func evaluateChallengeProgress() {
         resetIfNewDay()
+        let ratio = startingBalance / 10_000
         switch todayChallenge.id {
-        case 4: challengeProgress = cashBalance >= 4_000 ? 1 : 0
-        case 7: challengeProgress = cashBalance <= 6_000 ? 1 : 0
+        case 4: challengeProgress = cashBalance >= 4_000 * ratio ? 1 : 0
+        case 7: challengeProgress = cashBalance <= 6_000 * ratio ? 1 : 0
         case 8:
             if netWorthAtDayStart <= 0 { netWorthAtDayStart = currentNetWorth }
             challengeProgress = currentNetWorth >= netWorthAtDayStart * 1.02 ? 1 : 0
@@ -375,7 +380,7 @@ class AppState: ObservableObject {
             challengeProgress = min(challengeProgress + shares, todayChallenge.target)
         case 5:
             totalSpentToday += cost
-            if totalSpentToday >= 2_000 { challengeProgress = 1 }
+            if totalSpentToday >= 2_000 * startingBalance / 10_000 { challengeProgress = 1 }
         case 6 where sector == "Gaming" || sector == "Shopping":
             challengeProgress = 1
         default: break
@@ -396,7 +401,7 @@ class AppState: ObservableObject {
         resetIfNewDay()
         quickBuyCount += 1
         switch todayChallenge.id {
-        case 2 where budget >= 1_000: challengeProgress = 1
+        case 2 where budget >= 1_000 * startingBalance / 10_000: challengeProgress = 1
         case 9: challengeProgress = min(challengeProgress + 1, todayChallenge.target)
         default: break
         }
@@ -711,6 +716,7 @@ class AppState: ObservableObject {
 
     func resetPortfolio(startingBalance: Double) {
         cashBalance = startingBalance
+        self.startingBalance = startingBalance
         sharesOwned = [:]
         purchasePrices = [:]
         ownedStocks = []

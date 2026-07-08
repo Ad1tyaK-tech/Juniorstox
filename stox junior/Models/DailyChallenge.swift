@@ -18,11 +18,27 @@ struct DailyChallenge: Identifiable, Equatable {
         DailyChallenge(id: 9, description: "Use Quick Buy 3 times today",                              target: 3),
     ]
 
+    // Returns a copy with cash amounts in the description scaled to the given starting balance.
+    func scaled(to startingBalance: Double) -> DailyChallenge {
+        let ratio = startingBalance / 10_000
+        let fmt = NumberFormatter()
+        fmt.numberStyle = .currency
+        fmt.maximumFractionDigits = 0
+        func cash(_ base: Double) -> String { fmt.string(from: NSNumber(value: (base * ratio).rounded())) ?? "$\(Int(base * ratio))" }
+        switch id {
+        case 2: return DailyChallenge(id: id, description: "Use Quick Buy with a \(cash(1_000)) or greater budget", target: target)
+        case 4: return DailyChallenge(id: id, description: "Bring your cash balance up to \(cash(4_000)) today", target: target)
+        case 5: return DailyChallenge(id: id, description: "Spend \(cash(2_000)) on stocks today", target: target)
+        case 7: return DailyChallenge(id: id, description: "Bring your cash balance down to \(cash(6_000)) today", target: target)
+        default: return self
+        }
+    }
+
     // Deterministic per-day selection — changes every midnight, same for all sessions on the same day.
-    static func forToday() -> DailyChallenge {
+    static func forToday(startingBalance: Double = 10_000) -> DailyChallenge {
         let c = Calendar.current.dateComponents([.year, .month, .day], from: Date())
         let seed = (c.year ?? 2026) * 400 + (c.month ?? 1) * 31 + (c.day ?? 1)
-        return all[abs(seed) % all.count]
+        return all[abs(seed) % all.count].scaled(to: startingBalance)
     }
 
     static var todayKey: String {
