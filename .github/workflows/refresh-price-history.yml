@@ -1,0 +1,35 @@
+name: Refresh Price History
+
+# Runs once per weekday after US market close (9 PM ET = 1 AM UTC next day).
+# Fetches 90-day closing prices from Alpha Vantage for all 10 tickers and
+# stores them in Supabase. The app reads from Supabase, so the AV key never
+# touches a user device and the 25 req/day free-tier limit is used in one
+# controlled server-side burst (10 calls total per run).
+on:
+  schedule:
+    - cron: '0 1 * * 2-6'  # 1 AM UTC Tue–Sat (covers Mon–Fri market closes)
+  workflow_dispatch:        # allows a manual trigger from the Actions tab
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15     # 10 tickers × 13 s delay = ~2 min; 15 min is generous
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+
+      - name: Install dependencies
+        run: npm install
+        working-directory: scripts
+
+      - name: Refresh price history
+        working-directory: scripts
+        env:
+          ALPHA_VANTAGE_API_KEY:     ${{ secrets.ALPHA_VANTAGE_API_KEY }}
+          SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node refresh-price-history.js
