@@ -114,6 +114,7 @@ struct LoginView: View {
         Task {
             do {
                 try await appState.attemptLogin(username: name, password: password)
+                RecoveryRateLimiter().reset()
             } catch {
                 errorMessage = error.localizedDescription
                 isLoading = false

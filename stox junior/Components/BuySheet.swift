@@ -9,10 +9,11 @@ struct BuySheet: View {
 
     @State private var shares: Int = 1
 
+    private var cashBalanceDollars: Double { Double(appState.cashBalance) / 100.0 }
     private var totalCost: Double { stock.price * Double(shares) }
-    private var remaining: Double { appState.cashBalance - totalCost }
-    private var canAfford: Bool { totalCost <= appState.cashBalance }
-    private var canAddShare: Bool { stock.price * Double(shares + 1) <= appState.cashBalance }
+    private var remaining: Double { cashBalanceDollars - totalCost }
+    private var canAfford: Bool { totalCost <= cashBalanceDollars }
+    private var canAddShare: Bool { stock.price * Double(shares + 1) <= cashBalanceDollars }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -86,20 +87,20 @@ struct BuySheet: View {
 
                     // Cost summary card
                     VStack(spacing: 12) {
-                        CostRow(label: "Price per share", value: String(format: "$%.2f", stock.price))
+                        CostRow(label: "Price per share", value: stock.price.formatted(.currency(code: "USD")))
                         CostRow(label: "Shares", value: "\(shares)")
                         Rectangle()
                             .fill(AppColors.divider)
                             .frame(height: 1)
                         CostRow(
                             label: "Total cost",
-                            value: String(format: "$%.2f", totalCost),
+                            value: totalCost.formatted(.currency(code: "USD")),
                             bold: true,
                             color: canAfford ? AppColors.textPrimary : AppColors.loss
                         )
                         CostRow(
                             label: "Cash after purchase",
-                            value: String(format: "$%.2f", remaining),
+                            value: remaining.formatted(.currency(code: "USD")),
                             color: canAfford ? AppColors.gain : AppColors.loss
                         )
                     }

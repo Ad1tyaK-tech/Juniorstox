@@ -37,15 +37,19 @@ struct WelcomeView: View {
                     .font(.system(size: 55, weight: .bold))
                     .foregroundColor(.white)
 
-                // Subtitle
-                Text("Built For Tomorrow's Investors")
-                    .font(.title3)
-                    .foregroundColor(.white.opacity(0.8))
 
                 Text("Trade with virtual money, explore live markets, unlock achievements, and build the confidence to invest in the real world.")
-                    .multilineTextAlignment(.center)
                     .padding(.horizontal, 35)
-                    .foregroundColor(.white.opacity(0.75))
+                    .multilineTextAlignment(.center)
+                    .font(.title3)
+                    .foregroundColor(.white.opacity(0.8))
+                
+                Text("Stocks & Markets are entirely simulated. No Real Money is involved. This is intended to be education not for any financial advice.")
+                    .multilineTextAlignment(.center)
+                    .font(.footnote)
+                    .padding(.horizontal, 15)
+                    .padding(.vertical, 30)
+                    .foregroundColor(.white.opacity(0.8))
 
                 Spacer()
 

@@ -204,11 +204,11 @@ struct InfoView: View {
     private let accountFAQ: [FAQItem] = [
         FAQItem(
             question: "How do I recover my account if I forget my password?",
-            answer: "If you linked a recovery keycode to your account (found under Profile → Link Account to Email), you can use it on the Forgot Password screen to verify your identity and reset your password. Without a keycode, a forgotten password means the account cannot be recovered — all data is stored locally on your device only."
+            answer: "If you linked a recovery keycode to your account (found under Profile → Account Recovery), you can use it on the Forgot Password screen to verify your identity and reset your password. Without a keycode, a forgotten password means the account cannot be recovered — all data is stored locally on your device only."
         ),
         FAQItem(
             question: "What is the account recovery keycode?",
-            answer: "It's an optional string you set in Profile → Link Account to Email. It acts as a second piece of identification — only someone who knows the keycode can trigger a password reset. It is stored only on this device and is never sent anywhere."
+            answer: "It's an optional string you set in Profile → Account Recovery. It acts as a second piece of identification — only someone who knows the keycode can trigger a password reset. It is stored only on this device and is never sent anywhere."
         ),
         FAQItem(
             question: "Does the app send or access any emails?",

@@ -6,8 +6,8 @@ struct PortfolioHistoryView: View {
     @EnvironmentObject var appState: AppState
 
     private var history: [NetWorthSnapshot]  { appState.netWorthHistory }
-    private var startValue: Double           { history.first?.value ?? 10_000 }
-    private var currentValue: Double         { appState.currentNetWorth }
+    private var startValue: Double           { Double(history.first?.value ?? 1_000_000) / 100.0 }
+    private var currentValue: Double         { Double(appState.currentNetWorth) / 100.0 }
     private var change: Double               { currentValue - startValue }
     private var changePercent: Double        { startValue > 0 ? (change / startValue) * 100 : 0 }
     private var isGain: Bool                 { change >= 0 }
@@ -39,7 +39,7 @@ struct PortfolioHistoryView: View {
                 .foregroundColor(AppColors.textSecondary)
                 .tracking(1.2)
 
-            Text("$\(String(format: "%.2f", currentValue))")
+            Text(currentValue.formatted(.currency(code: "USD")))
                 .font(.system(size: 38, weight: .bold, design: .rounded))
                 .foregroundColor(AppColors.textPrimary)
 
@@ -64,7 +64,7 @@ struct PortfolioHistoryView: View {
                     AreaMark(
                         x: .value("Time", snap.date),
                         yStart: .value("Base", chartBounds.min),
-                        yEnd: .value("Value", snap.value)
+                        yEnd: .value("Value", snap.valueDollars)
                     )
                     .foregroundStyle(
                         LinearGradient(
@@ -76,7 +76,7 @@ struct PortfolioHistoryView: View {
                 ForEach(history) { snap in
                     LineMark(
                         x: .value("Time", snap.date),
-                        y: .value("Net Worth", snap.value)
+                        y: .value("Net Worth", snap.valueDollars)
                     )
                     .foregroundStyle(trendColor)
                     .lineStyle(StrokeStyle(lineWidth: 2))
@@ -241,7 +241,7 @@ struct PortfolioHistoryView: View {
 
     // Y-axis domain with padding so the line never touches the edges
     private var chartBounds: (min: Double, max: Double) {
-        let vals = history.map(\.value)
+        let vals = history.map(\.valueDollars)
         let lo   = vals.min() ?? (startValue - 500)
         let hi   = vals.max() ?? (startValue + 500)
         let pad  = Swift.max((hi - lo) * 0.18, 60)

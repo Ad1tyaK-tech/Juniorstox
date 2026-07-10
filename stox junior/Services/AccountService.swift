@@ -66,6 +66,14 @@ actor AccountService {
         return account
     }
 
+    // Re-fetches account data for a user who already authenticated in a prior session.
+    // No password check — the stored username is the trust anchor.
+    func fetchAccount(username: String) async throws -> UserAccount {
+        let rows: [UserAccount] = try await fetch("accounts?username=eq.\(pct(username))&select=*")
+        guard let account = rows.first else { throw AccountError.notFound }
+        return account
+    }
+
     func createAccount(username: String, password: String) async throws -> UserAccount {
         // Uniqueness check
         let existing: [[String: String]] = try await fetch(

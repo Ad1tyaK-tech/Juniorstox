@@ -9,11 +9,19 @@ struct RootView: View {
 
         Group {
             switch appState.authState {
+            case .loading:
+                ZStack {
+                    AppColors.background.ignoresSafeArea()
+                    ProgressView()
+                        .tint(AppColors.accent)
+                        .scaleEffect(1.5)
+                }
             case .welcome:        WelcomeView()
             case .login:          LoginView()
             case .signup:         CreateAccountView()
-            case .forgotPassword: ForgotPasswordView()
-            case .loggedIn:       MainDashboardView()
+            case .forgotPassword:  ForgotPasswordView()
+            case .privacyConsent:  PrivacyPolicyView()
+            case .loggedIn:        MainDashboardView()
             }
         }
         .environmentObject(appState)

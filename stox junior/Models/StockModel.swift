@@ -8,7 +8,7 @@ struct Stock: Identifiable {
     let symbol: String
     // The fun, kid-friendly company name shown in the app (e.g. "Orange").
     let company: String
-    // The real Finnhub ticker used behind the scenes for the API call (e.g. "AAPL").
+    // Internal key used as the price seed and Supabase row ID (e.g. "AAPL").
     let realTicker: String
 
     let price: Double
@@ -24,8 +24,7 @@ struct Stock: Identifiable {
 
 // MARK: - FUN-NAME ALIAS MAP
 //
-// Maps the real ticker (used for the Finnhub API call) to a fun display name
-// and a fun display ticker. The kid never sees the real ticker.
+// Maps an internal ticker key to the kid-friendly display name and symbol shown in the app.
 struct StockAlias {
     let realTicker: String
     let displaySymbol: String
@@ -91,7 +90,7 @@ let sampleStocks: [Stock] = [
         price: 891.55,
         changePercent: 2.71,
         trend: "Increasing",
-        slopeRate: 2.7,
+        slopeRate: 1.2,
         maxima: 905.00,
         minima: 870.00,
         floor: 800
@@ -130,7 +129,7 @@ let sampleStocks: [Stock] = [
         price: 191.30,
         changePercent: 0.64,
         trend: "Increasing",
-        slopeRate: 0.6,
+        slopeRate: 0.3,
         maxima: 193.00,
         minima: 189.10,
         floor: 180.00
@@ -143,7 +142,7 @@ let sampleStocks: [Stock] = [
         price: 578.90,
         changePercent: -0.88,
         trend: "Decreasing",
-        slopeRate: -0.88,
+        slopeRate: -0.5,
         maxima: 585.00,
         minima: 575.00,
         floor: 550.00
@@ -156,7 +155,7 @@ let sampleStocks: [Stock] = [
         price: 130.45,
         changePercent: 1.82,
         trend: "Increasing",
-        slopeRate: 1.82,
+        slopeRate: 0.7,
         maxima: 133.20,
         minima: 128.50,
         floor: 125.00
@@ -169,7 +168,7 @@ let sampleStocks: [Stock] = [
         price: 242.15,
         changePercent: 3.45,
         trend: "Increasing",
-        slopeRate: 3.45,
+        slopeRate: 1.6,
         maxima: 250.00,
         minima: 234.00,
         floor: 215.00
@@ -182,7 +181,7 @@ let sampleStocks: [Stock] = [
         price: 42.30,
         changePercent: -2.10,
         trend: "Decreasing",
-        slopeRate: -2.10,
+        slopeRate: -0.8,
         maxima: 44.50,
         minima: 41.00,
         floor: 38.00

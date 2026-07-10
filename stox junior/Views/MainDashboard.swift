@@ -19,6 +19,8 @@ struct MainDashboardView: View {
     // Custom paging
     @State private var pageDragOffset: CGFloat = 0
 
+    @ScaledMetric(relativeTo: .largeTitle) private var streakEmojiSize: CGFloat = 88
+
     var body: some View {
         ZStack {
             VStack(spacing: 0) {
@@ -44,6 +46,8 @@ struct MainDashboardView: View {
                                     .foregroundColor(AppColors.textPrimary)
                                     .monospacedDigit()
                             }
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel("\(appState.currentStreak) day streak")
                         }
                         HStack(spacing: 4) {
                             Text("💎")
@@ -53,6 +57,8 @@ struct MainDashboardView: View {
                                 .foregroundColor(AppColors.textPrimary)
                                 .monospacedDigit()
                         }
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel("\(appState.gems) gems")
                     }
 
                     Spacer()
@@ -217,7 +223,8 @@ struct MainDashboardView: View {
             withAnimation(.spring(response: 0.55, dampingFraction: 0.65).delay(0.55)) {
                 gemBurstFloating = true
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.7) {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 1_700_000_000)
                 gemBurstVisible = false
                 gemBurstFloating = false
             }
@@ -227,7 +234,8 @@ struct MainDashboardView: View {
             withAnimation(.spring(response: 0.45, dampingFraction: 0.65)) {
                 showStreakPopup = true
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.3) {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 2_300_000_000)
                 withAnimation(.spring(response: 0.38, dampingFraction: 0.88)) {
                     showStreakPopup = false
                 }
@@ -249,9 +257,9 @@ struct MainDashboardView: View {
 
             VStack(spacing: 18) {
                 Text("🔥")
-                    .font(.system(size: 88))
+                    .font(.system(size: streakEmojiSize))
                 Text("\(appState.currentStreak) Day Streak!")
-                    .font(.system(size: 36, weight: .black))
+                    .font(.system(.largeTitle, weight: .black))
                     .foregroundColor(.white)
                 Text("+1 💎 streak bonus")
                     .font(.title3.weight(.semibold))

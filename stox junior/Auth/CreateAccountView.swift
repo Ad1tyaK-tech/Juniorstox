@@ -11,11 +11,15 @@ struct CreateAccountView: View {
     @State private var errorMessage: String? = nil
     @State private var isLoading = false
 
+    private let currentYear = Calendar.current.component(.year, from: .now)
+    @State private var birthYear: Int = Calendar.current.component(.year, from: .now) - 16
+
+    private var isAgeValid: Bool { currentYear - birthYear >= 13 }
     private var isPasswordValid: Bool { password.count >= 8 }
     private var passwordsMatch: Bool { password == confirmPassword && !password.isEmpty }
     private var canCreate: Bool {
         !fullName.trimmingCharacters(in: .whitespaces).isEmpty &&
-        isPasswordValid && passwordsMatch && !isLoading
+        isPasswordValid && passwordsMatch && isAgeValid && !isLoading
     }
 
     var body: some View {
@@ -56,6 +60,29 @@ struct CreateAccountView: View {
                             .background(AppColors.inputBackground)
                             .foregroundColor(AppColors.textPrimary)
                             .cornerRadius(14)
+
+                        HStack {
+                            Text("Birth Year")
+                                .foregroundColor(AppColors.textPrimary)
+                            Spacer()
+                            Picker("Birth Year", selection: $birthYear) {
+                                ForEach(Array((currentYear - 100)...currentYear).reversed(), id: \.self) { year in
+                                    Text(String(year)).tag(year)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .tint(AppColors.accent)
+                        }
+                        .padding(.vertical, 10)
+                        .padding(.horizontal, 16)
+                        .background(AppColors.inputBackground)
+                        .cornerRadius(14)
+
+                        if !isAgeValid {
+                            Text("You must be 13 or older to create an account")
+                                .font(.caption)
+                                .foregroundColor(AppColors.loss)
+                        }
 
                         SecureField("Password (8+ characters)", text: $password)
                             .textInputAutocapitalization(.never)
@@ -145,8 +172,9 @@ struct CreateAccountView: View {
                 }
             }
         }
-        .onChange(of: fullName) { _, _ in errorMessage = nil }
-        .onChange(of: email)    { _, _ in errorMessage = nil }
+        .onChange(of: fullName)    { _, _ in errorMessage = nil }
+        .onChange(of: email)       { _, _ in errorMessage = nil }
+        .onChange(of: birthYear)   { _, _ in errorMessage = nil }
     }
 
     private func createAccount() {

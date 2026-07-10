@@ -255,7 +255,7 @@ struct ProfileView: View {
                         Image(systemName: "envelope.fill")
                             .foregroundColor(AppColors.textSecondary)
                             .frame(width: 28)
-                        Text("Link Account to Email")
+                        Text("Account Recovery")
                             .foregroundColor(AppColors.textPrimary)
                         Spacer()
                         if !appState.linkedEmail.isEmpty {
@@ -584,11 +584,11 @@ private struct LinkEmailSheet: View {
                     HStack(alignment: .top, spacing: 8) {
                         Image(systemName: "envelope.badge.shield.half.filled")
                             .foregroundColor(AppColors.textTertiary)
-                            .font(.caption)
+                            .font(.subheadline)
                             .padding(.top, 1)
                         Text("This app never sends or accesses any email. Your entry is stored only on this device and used as a keycode to recover your account if you forget your password.")
                             .font(.caption)
-                            .foregroundColor(AppColors.textSecondary)
+                            .foregroundColor(AppColors.textPrimary)
                     }
                 }
                 .padding(12)
@@ -603,6 +603,13 @@ private struct LinkEmailSheet: View {
                     .background(AppColors.inputBackground)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .onChange(of: emailInput) { _, _ in errorMessage = nil }
+                
+                 Text("Make sure it is something you can remember easily and not generic so it's not easily guessable.")
+                    .multilineTextAlignment(.center)
+                    .opacity(0.9)
+                    .font(.footnote)
+                    .padding(.vertical, 14)
+                    
 
                 if let error = errorMessage {
                     Text(error)

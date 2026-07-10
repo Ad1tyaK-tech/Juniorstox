@@ -49,7 +49,7 @@ struct PortfolioView: View {
                     .font(.largeTitle.bold())
                     .foregroundColor(AppColors.textPrimary)
 
-                Text("Cash: $\(appState.cashBalance, specifier: "%.2f")")
+                Text(String(format: "Cash: $%.2f", Double(appState.cashBalance) / 100.0))
                     .foregroundColor(AppColors.gain)
 
                 if appState.ownedStocks.isEmpty {
@@ -288,9 +288,10 @@ struct PortfolioView: View {
     }
 
     private var emptyPlanMessage: String {
+        let cashDollars = Double(appState.cashBalance) / 100.0
         guard parsedBudget > 0 else { return "Enter a budget above to see your plan." }
-        if parsedBudget > appState.cashBalance {
-            return "Budget exceeds your cash balance of $\(String(format: "%.2f", appState.cashBalance))."
+        if parsedBudget > cashDollars {
+            return "Budget exceeds your cash balance of $\(String(format: "%.2f", cashDollars))."
         }
         switch investorMode {
         case .passive:  return "No steadily growing stocks match your budget right now."
@@ -306,7 +307,7 @@ struct PortfolioView: View {
     }
 
     private var quickBuyPlan: [QuickBuyItem] {
-        let budget = min(parsedBudget, appState.cashBalance)
+        let budget = min(parsedBudget, Double(appState.cashBalance) / 100.0)
         guard budget > 0 else { return [] }
 
         let candidates: [Stock]

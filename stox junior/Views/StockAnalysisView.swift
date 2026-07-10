@@ -13,8 +13,6 @@ struct StockAnalysisView: View {
     @State private var showBuySheet = false
     @State private var showAdvanced = false
 
-    private let stockService = StockService()
-
     private var insight: String {
         let c = stock.changePercent
         switch c {
@@ -99,7 +97,8 @@ struct StockAnalysisView: View {
         .task {
             isLoadingAnalysis = true
             do {
-                priceAnalysis = try await stockService.fetchPriceAnalysis(for: stock.realTicker)
+                // Use the shared service so blockCellularData is respected
+                priceAnalysis = try await appState.stockService.fetchPriceAnalysis(for: stock.realTicker)
                 isEstimated = false
             } catch {
                 let synthetic = PriceAnalyzer.syntheticPrices(
@@ -117,7 +116,8 @@ struct StockAnalysisView: View {
         .onAppear {
             // Auto-advance the tutorial from the "tap a stock" step into the analysis walkthrough.
             guard appState.showTutorial, appState.tutorialStep == tutorialStockTapStep else { return }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 500_000_000)
                 withAnimation(.easeInOut(duration: 0.25)) {
                     appState.tutorialStep = tutorialStockTapStep + 1
                 }
@@ -189,17 +189,17 @@ struct StockAnalysisView: View {
             )
             AnalysisRow(
                 title: "Max Price",
-                value: String(format: "$%.2f", stock.maxima),
+                value: stock.maxima.formatted(.currency(code: "USD")),
                 info: "The highest price this stock hit today — its peak moment. If the current price is close to this, it's near its best point of the day."
             )
             AnalysisRow(
                 title: "Min Price",
-                value: String(format: "$%.2f", stock.minima),
+                value: stock.minima.formatted(.currency(code: "USD")),
                 info: "The lowest price today — the cheapest it's been. If the current price is close to this, it might be a more affordable entry point."
             )
             AnalysisRow(
                 title: "Support Floor",
-                value: String(format: "$%.2f", stock.floor),
+                value: stock.floor.formatted(.currency(code: "USD")),
                 info: "Yesterday's closing price. This acts like a baseline — if today's price is above it, the stock is doing better than yesterday!"
             )
             AnalysisRow(
@@ -377,7 +377,7 @@ struct StockAnalysisView: View {
 
             AnalysisRow(
                 title: "20-Day SMA",
-                value: String(format: "$%.2f", analysis.sma),
+                value: analysis.sma.formatted(.currency(code: "USD")),
                 info: "Simple Moving Average: the arithmetic mean of the last 20 closing prices. When the current price is above SMA, the stock is in short-term strength. Below SMA signals short-term weakness. Widely used as a baseline by technical analysts."
             )
 
@@ -450,7 +450,7 @@ struct StockAnalysisView: View {
                     Image(systemName: "arrow.up.arrow.down")
                         .foregroundColor(AppColors.purple)
                         .font(.caption)
-                    Text("Swing range over 90 days: \(String(format: "$%.2f", range))")
+                    Text("Swing range over 90 days: \(range.formatted(.currency(code: "USD")))")
                         .font(.caption)
                         .foregroundColor(AppColors.textSecondary)
                 }

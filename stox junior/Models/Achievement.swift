@@ -58,6 +58,8 @@ struct AchievementDef: Identifiable {
         case "safeInvestor":     return "Buy \(n)+ shares of steady stocks"
         case "momentumBuyer":    return "Buy \(n)+ shares in fast-rising stocks (+2% today)"
         case "bargainer":        return "Buy \(n)+ shares near a stock's floor price"
+        case "tookProfit":       return "Sell a stock at a profit \(n)+ times"
+        case "cutLosses":        return "Sell a stock at a loss \(n)+ times"
         case "marketAddict":
             let windows = [5, 7, 15, 25, 100]
             return "Open the app \(n)× within \(windows[tier.rawValue]) days"
@@ -93,6 +95,12 @@ struct AchievementDef: Identifiable {
         .init(id: "bargainer",        title: "Bargainer",
               icon: "tag.fill",
               thresholds: [5, 20, 50, 100, 250]),
+        .init(id: "tookProfit",       title: "Profit Taker",
+              icon: "arrow.up.forward.circle.fill",
+              thresholds: [1, 5, 25, 100, 500]),
+        .init(id: "cutLosses",        title: "Loss Cutter",
+              icon: "scissors.circle.fill",
+              thresholds: [1, 5, 25, 100, 500]),
         .init(id: "marketAddict",     title: "Market Addict",
               icon: "flame.fill",
               thresholds: [15, 30, 50, 100, 500]),

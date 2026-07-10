@@ -20,8 +20,8 @@ struct HomeView: View {
     }
 
     private var history: [NetWorthSnapshot] { appState.netWorthHistory }
-    private var currentNetWorth: Double      { appState.currentNetWorth }
-    private var startValue: Double           { history.first?.value ?? 10_000 }
+    private var currentNetWorth: Double      { Double(appState.currentNetWorth) / 100.0 }
+    private var startValue: Double           { Double(history.first?.value ?? 1_000_000) / 100.0 }
     private var change: Double               { currentNetWorth - startValue }
     private var isGain: Bool                 { change >= 0 }
     private var trendColor: Color            { isGain ? AppColors.gain : AppColors.loss }
@@ -41,7 +41,7 @@ struct HomeView: View {
                         .font(.largeTitle.bold())
                         .foregroundColor(AppColors.textPrimary)
 
-                    Text("Cash Balance: $\(appState.cashBalance, specifier: "%.2f")")
+                    Text(String(format: "Cash Balance: $%.2f", Double(appState.cashBalance) / 100.0))
                         .foregroundColor(AppColors.gain)
                 }
 
@@ -164,7 +164,7 @@ struct HomeView: View {
                         .font(.caption.bold())
                         .foregroundColor(AppColors.textSecondary)
                         .tracking(1.2)
-                    Text("$\(String(format: "%.2f", currentNetWorth))")
+                    Text(currentNetWorth.formatted(.currency(code: "USD")))
                         .font(.title2.bold())
                         .foregroundColor(AppColors.textPrimary)
                 }
@@ -187,7 +187,7 @@ struct HomeView: View {
                         AreaMark(
                             x: .value("Time", snap.date),
                             yStart: .value("Base", chartBounds.min),
-                            yEnd: .value("Value", snap.value)
+                            yEnd: .value("Value", snap.valueDollars)
                         )
                         .foregroundStyle(
                             LinearGradient(
@@ -199,7 +199,7 @@ struct HomeView: View {
                     ForEach(history) { snap in
                         LineMark(
                             x: .value("Time", snap.date),
-                            y: .value("Net Worth", snap.value)
+                            y: .value("Net Worth", snap.valueDollars)
                         )
                         .foregroundStyle(trendColor)
                         .lineStyle(StrokeStyle(lineWidth: 2))
@@ -235,7 +235,7 @@ struct HomeView: View {
     // MARK: - Helpers
 
     private var chartBounds: (min: Double, max: Double) {
-        let vals = history.map(\.value)
+        let vals = history.map(\.valueDollars)
         let lo   = vals.min() ?? (startValue - 200)
         let hi   = vals.max() ?? (startValue + 200)
         let pad  = Swift.max((hi - lo) * 0.18, 40)
