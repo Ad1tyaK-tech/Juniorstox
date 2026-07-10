@@ -198,10 +198,10 @@ struct ProfileView: View {
                 rowDivider
 
                 HStack {
-                    Image(systemName: "hand.tap.fill")
+                    Image(systemName: "speaker.wave.2.fill")
                         .foregroundColor(AppColors.textSecondary)
                         .frame(width: 28)
-                    Text("Haptics & Sounds")
+                    Text("Sounds")
                         .foregroundColor(AppColors.textPrimary)
                     Spacer()
                     Toggle("", isOn: Binding(

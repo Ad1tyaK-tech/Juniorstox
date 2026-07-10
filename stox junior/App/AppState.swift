@@ -90,6 +90,7 @@ class AppState: ObservableObject {
     var lastSnapshotDate: Date = .now
 
     let accountService = AccountService()
+    let marketService  = MarketService()
     private var stockService = StockService()
 
     init() {
@@ -142,6 +143,7 @@ class AppState: ObservableObject {
 
         // Fill in any hourly snapshots that were missed while the app was closed
         applyAfkCatchUp()
+        Task { await refreshMarket(silent: true) }
     }
 
     /// Write current state to Supabase (fire-and-forget — never blocks the UI).
@@ -183,11 +185,12 @@ class AppState: ObservableObject {
         authState = .loggedIn
     }
 
-    /// Called from scenePhase .active — fills missed hourly slots and records the open when logged in.
+    /// Called from scenePhase .active — fills missed hourly slots, records the open, and syncs market prices.
     func catchUpSnapshots() {
         guard authState == .loggedIn else { return }
         processAppOpen()
         applyAfkCatchUp()
+        Task { await refreshMarket(silent: true) }
     }
 
     /// Reset all state and return to the welcome screen.
@@ -308,21 +311,8 @@ class AppState: ObservableObject {
     func refreshMarket(silent: Bool = false) async {
         guard !isRefreshing else { return }
         isRefreshing = true
-
-        var fetched: [Stock] = []
-        for attempt in 0..<3 {
-            if attempt > 0 {
-                try? await Task.sleep(nanoseconds: UInt64(attempt) * 1_500_000_000)
-            }
-            fetched = await stockService.fetchAllStocks()
-            if !fetched.isEmpty { break }
-        }
-
-        if fetched.isEmpty {
-            marketStocks = stockService.applySimulatedTicks(to: marketStocks)
-            evaluateChallengeProgress()
-            saveToAccount()
-        } else {
+        let fetched = await stockService.fetchAllStocks(using: marketService)
+        if !fetched.isEmpty {
             marketStocks = fetched
             snapshotNetWorth()
         }
@@ -699,7 +689,6 @@ class AppState: ObservableObject {
         blockCellularData = state.blockCellularData
         linkedEmail       = state.linkedEmail
         colorSchemePref   = state.colorSchemePref
-        HapticsManager.isDisabled = state.hapticsDisabled
         SoundManager.isDisabled = state.hapticsDisabled
     }
 
@@ -727,7 +716,6 @@ class AppState: ObservableObject {
 
     func setHapticsDisabled(_ disabled: Bool) {
         hapticsDisabled = disabled
-        HapticsManager.isDisabled = disabled
         SoundManager.isDisabled = disabled
         saveToAccount()
     }

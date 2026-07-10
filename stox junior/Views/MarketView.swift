@@ -58,7 +58,7 @@ struct MarketView: View {
                         }
                         .font(.caption2)
                         .foregroundColor(AppColors.textTertiary)
-                        Text("Prices delayed up to 15 minutes")
+                        Text("Prices do not reflect actual market data. They are entirely simulated")
                             .font(.caption2)
                             .foregroundColor(AppColors.textTertiary)
                     }

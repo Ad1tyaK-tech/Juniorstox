@@ -40,30 +40,15 @@ struct StockAnalysisView: View {
             VStack(alignment: .leading, spacing: 20) {
 
                 // HEADER
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(stock.company)
-                            .font(.largeTitle.bold())
-                            .foregroundColor(AppColors.textPrimary)
-                        Text(stock.symbol)
-                            .foregroundColor(AppColors.textSecondary)
-                        Text("Current Price: $\(stock.price, specifier: "%.2f")")
-                            .foregroundColor(AppColors.gain)
-                            .font(.title3.bold())
-                    }
-                    Spacer()
-                    Button {
-                        showBuySheet = true
-                    } label: {
-                        Label("Buy", systemImage: "cart.badge.plus")
-                            .font(.subheadline.bold())
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 10)
-                            .background(AppColors.accent)
-                            .clipShape(Capsule())
-                    }
-                    .padding(.top, 4)
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(stock.company)
+                        .font(.largeTitle.bold())
+                        .foregroundColor(AppColors.textPrimary)
+                    Text(stock.symbol)
+                        .foregroundColor(AppColors.textSecondary)
+                    Text("Current Price: $\(stock.price, specifier: "%.2f")")
+                        .foregroundColor(AppColors.gain)
+                        .font(.title3.bold())
                 }
 
                 HStack(spacing: 4) {

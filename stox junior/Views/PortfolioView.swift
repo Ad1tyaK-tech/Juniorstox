@@ -31,6 +31,7 @@ struct PortfolioView: View {
     @State private var quickBuyResult: String? = nil
     @State private var investorMode: QuickBuyMode = .passive
     @State private var showSellAllAlert: Bool = false
+    @FocusState private var budgetFocused: Bool
 
     private struct QuickBuyItem: Identifiable {
         let stock: Stock
@@ -100,7 +101,9 @@ struct PortfolioView: View {
                 PortfolioHistoryView()
             }
             .padding()
+            .simultaneousGesture(TapGesture().onEnded { budgetFocused = false })
         }
+        .scrollDismissesKeyboard(.interactively)
         .background(AppColors.background)
         .sheet(item: $stockToSell) { stock in
             SellSheet(stock: stock)
@@ -156,7 +159,14 @@ struct PortfolioView: View {
                         .foregroundColor(AppColors.textSecondary)
                     TextField("500", text: $quickBuyBudget)
                         .keyboardType(.decimalPad)
+                        .focused($budgetFocused)
                         .foregroundColor(AppColors.textPrimary)
+                        .toolbar {
+                            ToolbarItemGroup(placement: .keyboard) {
+                                Spacer()
+                                Button("Done") { budgetFocused = false }
+                            }
+                        }
                 }
                 .padding(13)
                 .background(AppColors.inputBackground)
