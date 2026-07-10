@@ -16,7 +16,7 @@ struct StockService {
     // Direction stays true; only the magnitude is exaggerated.
     private let changeAmplifier: Double = 3.0
 
-    // Max random intraday tick (±$) added on each pull to simulate live movement.
+    // Max random intraday tick (±$) added when generating fresh prices.
     private let maxTick: Double = 8.0
 
     // allowsCellularAccess kept for API compatibility with AppState's settings toggle.
@@ -24,34 +24,52 @@ struct StockService {
 
     // MARK: - Public API
 
-    // Returns all stocks for today using a deterministic seed so every user sees
-    // the same direction on the same calendar day. A small random tick is added on
-    // top so prices "move" on each manual refresh.
-    func fetchAllStocks() async -> [Stock] {
-        let today = Self.todayString()
-        return stockAliases.map { syntheticStock(for: $0, dateString: today) }
-    }
+    // Fetches current prices from the shared Supabase market_prices table.
+    // If prices are less than 1 hour old, all users get the same values.
+    // If stale or missing, generates new random prices and writes them to Supabase
+    // so the next user to open also sees this consistent state.
+    func fetchAllStocks(using marketService: MarketService) async -> [Stock] {
+        let today  = Self.todayString()
+        let cutoff = Date.now.addingTimeInterval(-3600)
 
-    // Applies a small random tick to each stock — used by AppState's hourly timer
-    // to keep the UI feeling live without any network call.
-    func applySimulatedTicks(to stocks: [Stock]) -> [Stock] {
-        stocks.map { stock in
-            let bias = stock.changePercent >= 0 ? 1.0 : -1.0
-            let tick = Double.random(in: -maxTick...maxTick) * 0.5
-                     + bias * Double.random(in: 0...maxTick * 0.5)
-            return Stock(
-                symbol:        stock.symbol,
-                company:       stock.company,
-                realTicker:    stock.realTicker,
-                price:         max(1.0, stock.price + tick),
+        let rows = await marketService.fetchMarketPrices()
+        if rows.count == stockAliases.count,
+           let newestUpdate = rows.map(\.updatedAt).max(),
+           newestUpdate > cutoff {
+            return stockAliases.compactMap { alias in
+                guard let row = rows.first(where: { $0.ticker == alias.realTicker }) else { return nil }
+                return Stock(
+                    symbol:        alias.displaySymbol,
+                    company:       alias.displayCompany,
+                    realTicker:    alias.realTicker,
+                    price:         row.price,
+                    changePercent: row.changePercent,
+                    trend:         row.trend,
+                    slopeRate:     row.slopeRate,
+                    maxima:        row.maxima,
+                    minima:        row.minima,
+                    floor:         row.floor
+                )
+            }
+        }
+
+        // Prices are stale or missing — generate fresh random prices and publish to Supabase
+        let stocks  = stockAliases.map { syntheticStock(for: $0, dateString: today) }
+        let newRows = stocks.map { stock in
+            MarketPriceRow(
+                ticker:        stock.realTicker,
+                price:         stock.price,
                 changePercent: stock.changePercent,
                 trend:         stock.trend,
                 slopeRate:     stock.slopeRate,
-                maxima:        stock.maxima + abs(tick),
-                minima:        max(1.0, stock.minima - abs(tick)),
-                floor:         stock.floor
+                maxima:        stock.maxima,
+                minima:        stock.minima,
+                floor:         stock.floor,
+                updatedAt:     .now
             )
         }
+        await marketService.upsertMarketPrices(newRows)
+        return stocks
     }
 
     // Returns a 90-day PriceAnalysis for a ticker.
@@ -93,7 +111,7 @@ struct StockService {
     // MARK: - Synthetic generation
 
     // Builds one Stock seeded by (ticker, date). The seeded price determines
-    // direction and magnitude; a small random tick on top varies each call.
+    // direction and magnitude; a small random tick on top varies each generation.
     private func syntheticStock(for alias: StockAlias, dateString: String) -> Stock {
         let base        = basePriceFor(alias.realTicker)
         let dailyReturn = seededDailyReturn(ticker: alias.realTicker, dateString: dateString)
