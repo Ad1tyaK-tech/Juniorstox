@@ -33,43 +33,43 @@ private let tutorialSteps: [TutorialStep] = [
 
     // 1 — Home overview
     .init(title: "Your Home Screen 🏠",
-          body: "Home shows your cash balance, today's market highlights, and quick stats. It's your launchpad every time you open the app.",
+          body: "Homepage shows your cash balance, today's market highlights, and quick stats. It's your launchpad every time you open the app.",
           tab: 0, arrow: .middle),
 
     // 2 — Daily Challenge
     .init(title: "Daily Challenge ⭐",
-          body: "Each day there's a small trading task. Complete it to earn 5 💎 Gems. Challenges reset at midnight — don't miss out!",
+          body: "Each day there's a small trading task. Complete it to earn 💎 gems. Don't miss out!",
           tab: 0, arrow: .upper),
 
     // 3 — Net Worth card
     .init(title: "Net Worth Card",
-          body: "This tracks your total wealth — your cash plus the live value of all your stocks. Tap it to jump to your full history chart.",
+          body: "This tracks your total wealth in your cash, plus the live value of all your stocks. Tap it to jump to your full history chart.",
           tab: 0, arrow: .middle),
 
     // 4 — Market sectors (auto-switch to tab 1)
     .init(title: "The Market 📈",
-          body: "Stocks are organized by sector — Big Tech, Chip Makers, Shopping, and more. Pull down to refresh prices. Tap any sector header to expand or collapse it.",
+          body: "Stocks are organized by sector. Pull down to refresh prices. Tap any sector header to expand or collapse it.",
           tab: 1, arrow: .middle),
 
     // 5 — Tap a stock (backdrop non-blocking; StockAnalysisView.onAppear auto-advances to step 6)
     .init(title: "Explore a Stock",
-          body: "Tap any stock card below to open its full analysis — live data, a 90-day chart, and AI-powered insights.",
+          body: "Tap any stock card below to open its full analysis which includes live data, a 90-day chart, and AI-powered insights.",
           tab: 1, arrow: .lower,
           allowsTaps: true, forceAction: true),
 
     // 6 — Analysis: Insight card + chart
     .init(title: "Insight & 90-Day Chart 💡",
-          body: "The Insight card gives a plain-English read on today's action. Below it is a 90-day price chart plotting each day's closing price — great for spotting long-term trends.",
+          body: "The Insight card gives a read on today's action. Below is a 90-day price chart plotting each day's closing price which helps you spot long-term trends!.",
           tab: nil, arrow: .upper, hasNavBar: true),
 
     // 7 — Analysis: Trend Signal + Market Data rows
     .init(title: "Trend Signal & Market Data",
-          body: "The Trend Signal (Bullish / Bearish / Neutral) is calculated from the 20-day average and price slope. Market Data rows below break down today's high, low, and daily % change. Tap the ℹ️ on any row for a plain-English explanation.",
+          body: "The Trend Signal (Bullish / Bearish / Neutral) is calculated from the 20-day average and price slope. Market Data rows below break down today's high, low, and daily change. Tap the ℹ️ on any row for an explanation.",
           tab: nil, arrow: .middle, hasNavBar: true),
 
     // 8 — Analysis: Advanced dropdown (backdrop non-blocking so user can tap it)
     .init(title: "Advanced Analysis 📊",
-          body: "Scroll down and tap 'Advanced Analysis' to unlock quant stats — SMA, OLS slope, volatility, and local price extrema with a full glossary. Tap Next when you're done exploring.",
+          body: "Scroll down and tap 'Advanced Analysis' to unlock quant stats. You can also tap the ℹ️ on any row for an explanation of these weird values! Tap Next when you're done exploring.",
           tab: nil, arrow: .lower,
           allowsTaps: true, hasNavBar: true),
 
@@ -80,22 +80,22 @@ private let tutorialSteps: [TutorialStep] = [
 
     // 10 — Quick Buy
     .init(title: "Quick Buy ⚡",
-          body: "Enter a budget, pick an investor style — Passive (steady), Momentum (rising fast), or Value (trading at a dip) — and tap 'Buy All!' to invest in one shot.",
+          body: "Enter a budget, pick an investor style. Are you looking for Passive (steady) Momentum (rising fast) or Value (trading at a dip)?! and tap 'Buy All!' to instantly invest.",
           tab: 2, arrow: .lower),
 
     // 11 — Achievements (top bar)
     .init(title: "Achievements 🏆",
-          body: "Tap the trophy icon in the top bar to browse your milestones. Each achievement has five tiers from Amateur to Platinum. Claim them for bonus 💎 Gems.",
+          body: "Tap the trophy icon in the top bar to browse your milestones. Each achievement has five tiers from Amateur to Platinum. Claim them for lots of 💎 gems!",
           tab: nil, arrow: .topRight),
 
     // 12 — Profile & Info
     .init(title: "Profile & Info",
-          body: "Tap your avatar (top right) to customize your profile and settings. Tap 'Info' (top left) anytime to re-read the full FAQ.",
+          body: "Tap your avatar (top right) to customize your profile and settings. Tap 'Info' (top left) anytime to read the full FAQ.",
           tab: nil, arrow: .topLeft),
 
     // 13 — Done (full-screen)
     .init(title: "You're All Set! 🚀",
-          body: "That's the whole app. Explore the market, build your portfolio, and see how high you can grow that $10,000. Good luck!",
+          body: "That's the whole app. Explore the market, build your portfolio, and see how high you can grow that $10,000. Good luck Mr.!",
           tab: 0, arrow: .none),
 ]
 
@@ -109,6 +109,22 @@ struct TutorialOverlay: View {
     private var idx: Int           { appState.tutorialStep }
     private var isFullScreen: Bool { step.arrow == .none }
     private var isLast: Bool       { idx == tutorialSteps.count - 1 }
+
+    private var userName: String   { appState.currentAccount?.username ?? "" }
+
+    private var stepTitle: String {
+        if idx == 0, !userName.isEmpty {
+            return "Welcome to Stox Junior, \(userName)! 🎉"
+        }
+        return step.title
+    }
+
+    private var stepBody: String {
+        if isLast, !userName.isEmpty {
+            return step.body.replacingOccurrences(of: "Good luck Mr.!", with: "Good luck Mr. \(userName)!")
+        }
+        return step.body
+    }
 
     var body: some View {
         GeometryReader { geo in
@@ -154,11 +170,11 @@ struct TutorialOverlay: View {
 
     private var fullScreenCard: some View {
         VStack(spacing: 22) {
-            Text(step.title)
+            Text(stepTitle)
                 .font(.title.bold())
                 .foregroundColor(AppColors.textPrimary)
                 .multilineTextAlignment(.center)
-            Text(step.body)
+            Text(stepBody)
                 .font(.body)
                 .foregroundColor(AppColors.textSecondary)
                 .multilineTextAlignment(.center)
@@ -191,10 +207,10 @@ struct TutorialOverlay: View {
                     }
                 }
             }
-            Text(step.title)
+            Text(stepTitle)
                 .font(.title3.bold())
                 .foregroundColor(AppColors.textPrimary)
-            Text(step.body)
+            Text(stepBody)
                 .font(.subheadline)
                 .foregroundColor(AppColors.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)

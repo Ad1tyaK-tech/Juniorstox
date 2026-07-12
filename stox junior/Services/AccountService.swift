@@ -32,9 +32,9 @@ actor AccountService {
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
 
-    init() {
-        base    = Secrets.supabaseURL
-        anonKey = Secrets.supabaseAnonKey
+    init(url: String, anonKey: String) {
+        base        = url
+        self.anonKey = anonKey
 
         let enc = JSONEncoder()
         enc.dateEncodingStrategy = .iso8601

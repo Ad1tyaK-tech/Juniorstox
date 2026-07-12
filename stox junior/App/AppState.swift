@@ -83,7 +83,7 @@ class AppState: ObservableObject {
     var currentAccount: UserAccount?
     var lastSnapshotDate: Date = .now
 
-    let accountService = AccountService()
+    let accountService = AccountService(url: Secrets.supabaseURL, anonKey: Secrets.supabaseAnonKey)
     let marketService  = MarketService()
     var stockService = StockService()
 

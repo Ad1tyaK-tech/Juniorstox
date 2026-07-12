@@ -18,7 +18,7 @@ struct PrivacyPolicyView: View {
                     Text("Your Privacy")
                         .font(.largeTitle.bold())
                         .foregroundColor(AppColors.textPrimary)
-                    Text("Plain-English summary of what we do — and don't do — with your data.")
+                    Text("What we do with your data.")
                         .font(.subheadline)
                         .foregroundColor(AppColors.textSecondary)
                         .multilineTextAlignment(.center)
@@ -32,21 +32,21 @@ struct PrivacyPolicyView: View {
 
                         PrivacySection(title: "What we store", icon: "internaldrive", iconColor: AppColors.accent) {
                             PrivacyRow(icon: "person.fill",               label: "Username",          detail: "Used to identify your account")
-                            PrivacyRow(icon: "lock.fill",                 label: "Password",          detail: "Stored securely — we can never read it")
+                            PrivacyRow(icon: "lock.fill",                 label: "Password",          detail: "Stored securely so we can never read it")
                             PrivacyRow(icon: "envelope.fill",             label: "Email (optional)",  detail: "Only for account recovery, never for marketing")
-                            PrivacyRow(icon: "chart.line.uptrend.xyaxis", label: "Portfolio activity",detail: "Simulated trades, balance, and history — synced so you can pick up where you left off")
+                            PrivacyRow(icon: "chart.line.uptrend.xyaxis", label: "Portfolio activity",detail: "Simulated trades, balance, and history are synced so you can pick up where you left off")
                             PrivacyRow(icon: "flame.fill",                label: "App opens",         detail: "Timestamps used only to count your login streak")
                         }
 
                         PrivacySection(title: "What we never collect", icon: "nosign", iconColor: Color.green) {
                             PrivacyRow(icon: "location.slash.fill",                    label: "Location",                detail: "Never")
-                            PrivacyRow(icon: "creditcard.trianglebadge.exclamationmark", label: "Real money or payments", detail: "Everything is simulated — no real money involved")
+                            PrivacyRow(icon: "creditcard.trianglebadge.exclamationmark", label: "Real money or payments", detail: "Everything is simulated")
                             PrivacyRow(icon: "person.2.slash",                         label: "Contacts",                detail: "Never accessed")
-                            PrivacyRow(icon: "eye.slash.fill",                         label: "Advertising identifiers", detail: "No ad tracking, ever")
+                            PrivacyRow(icon: "eye.slash.fill",                         label: "Advertising identifiers", detail: "No ad tracking")
                         }
 
                         PrivacySection(title: "We never share your data", icon: "hand.raised.fill", iconColor: Color.orange) {
-                            PrivacyRow(icon: "xmark.circle.fill", label: "No third-party sharing", detail: "Your data stays in your account — period")
+                            PrivacyRow(icon: "xmark.circle.fill", label: "No third-party sharing", detail: "Your data stays in your account")
                             PrivacyRow(icon: "xmark.circle.fill", label: "No data selling",        detail: "We don't sell or rent your information to anyone")
                         }
 

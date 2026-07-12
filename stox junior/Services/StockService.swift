@@ -115,6 +115,16 @@ struct StockService {
         let momentumChange      = momentum5d * 100.0 * 10.0  // ±1.5% avg → ±15%
         let momentumPriceImpact = seeded * momentum5d * 2.5  // ±1.5% avg → ±3.75% price shift
 
+        // Seeded daily opening amplifier — one roll per (ticker, date), same for all users.
+        // Roll is uniform [-10, 10]: 0 = flat open, ±10 = maximum drama.
+        // Volatility multiplier scales the actual % impact by price tier:
+        //   cheap/small stocks (e.g. PLY $42)  → multiplier ~4.8 → roll 10 = ~48% swing
+        //   large-cap stocks   (e.g. NMV $891) → multiplier  0.5 → roll 10 =   5% swing
+        let openRoll         = seededOpenAmplifier(ticker: alias.realTicker, dateString: dateString)
+        let volMult          = volatilityMultiplier(basePrice: base)
+        let openShockPercent = openRoll * volMult           // display-percent change from opening roll
+        let openShockPrice   = seeded * (openShockPercent / 100.0)
+
         // 10% chance per stock per fetch to fire a random amplifier in [-10, +10].
         // Negative values push the stock down; positive push it up.
         // The remaining 90% of fetches produce no amplifier effect.
@@ -122,19 +132,18 @@ struct StockService {
             ? Double.random(in: -10...10)
             : 0
 
-        // Sum: seeded base move + 5-day momentum push + shock.
-        // Cap at ±50 so values stay readable even on stacked extreme days.
+        // Sum: seeded base move + 5-day momentum push + daily opening shock + intraday noise.
+        // Cap raised to ±100 to let volatile stocks show their full opening swing.
         let baseChange  = dailyReturn * 100 * changeAmplifier
-        let totalChange = min(50.0, max(-50.0, baseChange + momentumChange + amplifier * 2.5))
+        let totalChange = min(100.0, max(-100.0, baseChange + momentumChange + openShockPercent + amplifier * 2.5))
         let slopeRate   = totalChange / 5.0
 
-        // Price: seeded anchor + larger random tick + shock impact + momentum drift.
-        // ±10 amplifier → ±6% price move; ±1.5% momentum avg → ±3.75% price drift.
+        // Price: seeded anchor + opening shock + intraday noise + momentum drift.
         let bias = dailyReturn >= 0 ? 1.0 : -1.0
         let normalTick = Double.random(in: -maxTick...maxTick) * 0.3
                        + bias * Double.random(in: 0...maxTick * 0.3)
         let shockImpact  = seeded * (amplifier * 0.006)
-        let displayPrice = max(1.0, seeded + normalTick + shockImpact + momentumPriceImpact)
+        let displayPrice = max(1.0, seeded + openShockPrice + normalTick + shockImpact + momentumPriceImpact)
 
         return Stock(
             symbol:        alias.displaySymbol,
@@ -161,6 +170,23 @@ struct StockService {
         s = s &* 6364136223846793005 &+ 1442695040888963407
         let u2 = Double(s >> 33) / Double(UInt64(1) << 31)
         return sqrt(-2.0 * log(u1)) * cos(2.0 * .pi * u2) * 0.015
+    }
+
+    // LCG-seeded uniform roll in [-10, 10] for (ticker, date).
+    // Appending "dawn" keeps this independent of seededDailyReturn's seed stream.
+    private func seededOpenAmplifier(ticker: String, dateString: String) -> Double {
+        var s = (ticker + dateString + "dawn").unicodeScalars
+            .reduce(UInt64(0)) { $0 &* 31 &+ UInt64($1.value) } | 1
+        s = s &* 6364136223846793005 &+ 1442695040888963407
+        let u = Double(s >> 33) / Double(UInt64(1) << 31) // [0, 2)
+        return (u - 1.0) * 10.0                           // [-10, 10)
+    }
+
+    // Maps a stock's base price to a volatility multiplier.
+    // Lower-priced stocks are treated as more volatile: the same roll value produces
+    // a much larger percentage swing than it would for a high-priced large-cap.
+    private func volatilityMultiplier(basePrice: Double) -> Double {
+        min(5.0, max(0.5, 200.0 / basePrice))
     }
 
     private func basePriceFor(_ realTicker: String) -> Double {
