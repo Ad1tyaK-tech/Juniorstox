@@ -15,8 +15,19 @@ struct StockCard: View {
                     .font(.headline)
                     .foregroundColor(AppColors.textPrimary)
 
-                Text(stock.symbol)
-                    .foregroundColor(AppColors.textSecondary)
+                HStack(spacing: 6) {
+                    Text(stock.symbol)
+                        .foregroundColor(AppColors.textSecondary)
+                    if stock.recentlySplit {
+                        Text("2:1 SPLIT")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Color.orange)
+                            .clipShape(Capsule())
+                    }
+                }
 
                 if let shares {
                     Text("\(shares) share\(shares == 1 ? "" : "s")")

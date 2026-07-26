@@ -33,6 +33,7 @@ extension AppState {
             marketStocks.first { $0.realTicker == ticker }
         }
 
+        loadAppliedSplitMultipliers()
         loadChallengeState(from: account)
         loadAchievementsState(from: account)
         loadSettingsState(from: account)
@@ -95,5 +96,19 @@ extension AppState {
 
     func encode<T: Encodable>(_ value: T) -> String? {
         (try? JSONEncoder().encode(value)).flatMap { String(data: $0, encoding: .utf8) }
+    }
+
+    // MARK: - Split multiplier persistence (UserDefaults — device-local)
+
+    func saveAppliedSplitMultipliers() {
+        if let data = try? JSONEncoder().encode(appliedSplitMultipliers) {
+            UserDefaults.standard.set(data, forKey: "appliedSplitMultipliers")
+        }
+    }
+
+    func loadAppliedSplitMultipliers() {
+        guard let data    = UserDefaults.standard.data(forKey: "appliedSplitMultipliers"),
+              let decoded = try? JSONDecoder().decode([String: Int].self, from: data) else { return }
+        appliedSplitMultipliers = decoded
     }
 }

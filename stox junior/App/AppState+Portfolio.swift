@@ -70,9 +70,35 @@ extension AppState {
         let fetched = await stockService.fetchAllStocks(using: marketService)
         if !fetched.isEmpty {
             marketStocks = fetched
+            applySplitsIfNeeded(from: fetched)
             snapshotNetWorth()
         }
         isRefreshing = false
+    }
+
+    // MARK: - Split Adjustment
+
+    // Compares each stock's current splitMultiplier to the last applied multiplier.
+    // If it grew, the user's shares are doubled (and avg purchase price halved) for each
+    // 2× increment, preserving total cost basis while reflecting the extra shares.
+    func applySplitsIfNeeded(from stocks: [Stock]) {
+        var didSplit = false
+        for stock in stocks {
+            let current = stock.splitMultiplier
+            let applied = appliedSplitMultipliers[stock.realTicker, default: 1]
+            // Always record the latest multiplier so future splits are detected correctly.
+            appliedSplitMultipliers[stock.realTicker] = max(applied, current)
+            guard current > applied, applied > 0 else { continue }
+            guard sharesOwned[stock.realTicker] != nil else { continue }
+            let ratio = current / applied
+            sharesOwned[stock.realTicker]! *= ratio
+            if let avgPrice = purchasePrices[stock.realTicker] {
+                purchasePrices[stock.realTicker] = avgPrice / Double(ratio)
+            }
+            didSplit = true
+        }
+        if didSplit { snapshotNetWorth() }
+        saveAppliedSplitMultipliers()
     }
 
     // MARK: - Portfolio Reset

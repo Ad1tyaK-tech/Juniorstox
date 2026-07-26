@@ -53,7 +53,7 @@ struct AchievementDef: Identifiable {
         case "diversePortfolio": return "Buy \(n)+ shares in 8+ different stocks"
         case "investor":         return "Hold \(n)+ shares in one stock at once"
         case "gambler":          return "Buy \(n)+ shares in volatile stocks (±2% today)"
-        case "intellectual":     return "Open the advanced view \(n)+ times"
+        case "intellectual":     return "Open the advanced info screen \(n)+ times"
         case "spontaneous":      return "Use Quick Buy \(n)+ times"
         case "safeInvestor":     return "Buy \(n)+ shares of steady stocks"
         case "momentumBuyer":    return "Buy \(n)+ shares in fast-rising stocks (+2% today)"

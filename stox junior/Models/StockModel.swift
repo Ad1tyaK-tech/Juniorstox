@@ -20,6 +20,11 @@ struct Stock: Identifiable {
     let maxima: Double
     let minima: Double
     let floor: Double
+
+    // Cumulative 2:1 split multiplier since epoch (1 = never split, 2 = once, 4 = twice…).
+    let splitMultiplier: Int
+    // True if a 2:1 split occurred within the last 7 calendar days.
+    let recentlySplit: Bool
 }
 
 // MARK: - FUN-NAME ALIAS MAP
@@ -58,132 +63,53 @@ let stockAliases: [StockAlias] = [
 let sampleStocks: [Stock] = [
 
     Stock(
-        symbol: "PEA",
-        company: "Pear",
-        realTicker: "AAPL",
-        price: 213.45,
-        changePercent: 0.57,
-        trend: "Increasing",
-        slopeRate: 1.8,
-        maxima: 214.10,
-        minima: 211.80,
-        floor: 200
+        symbol: "PEA", company: "Pear", realTicker: "AAPL",
+        price: 213.45, changePercent: 0.57, trend: "Increasing", slopeRate: 1.8,
+        maxima: 214.10, minima: 211.80, floor: 200, splitMultiplier: 1, recentlySplit: false
     ),
-
     Stock(
-        symbol: "MDS",
-        company: "Macrodense",
-        realTicker: "MSFT",
-        price: 412.10,
-        changePercent: -0.32,
-        trend: "Decreasing",
-        slopeRate: -0.4,
-        maxima: 418.00,
-        minima: 410.50,
-        floor: 395
+        symbol: "MDS", company: "Macrodense", realTicker: "MSFT",
+        price: 412.10, changePercent: -0.32, trend: "Decreasing", slopeRate: -0.4,
+        maxima: 418.00, minima: 410.50, floor: 395, splitMultiplier: 1, recentlySplit: false
     ),
-
     Stock(
-        symbol: "NMV",
-        company: "Nmovia",
-        realTicker: "NVDA",
-        price: 891.55,
-        changePercent: 2.71,
-        trend: "Increasing",
-        slopeRate: 1.2,
-        maxima: 905.00,
-        minima: 870.00,
-        floor: 800
+        symbol: "NMV", company: "Nmovia", realTicker: "NVDA",
+        price: 891.55, changePercent: 2.71, trend: "Increasing", slopeRate: 1.2,
+        maxima: 905.00, minima: 870.00, floor: 800, splitMultiplier: 1, recentlySplit: false
     ),
-
     Stock(
-        symbol: "EIN",
-        company: "Einstein",
-        realTicker: "TSLA",
-        price: 245.80,
-        changePercent: -1.40,
-        trend: "Decreasing",
-        slopeRate: -0.9,
-        maxima: 252.00,
-        minima: 244.00,
-        floor: 230
+        symbol: "EIN", company: "Einstein", realTicker: "TSLA",
+        price: 245.80, changePercent: -1.40, trend: "Decreasing", slopeRate: -0.9,
+        maxima: 252.00, minima: 244.00, floor: 230, splitMultiplier: 1, recentlySplit: false
     ),
-
     Stock(
-        symbol: "GEG",
-        company: "Geggol",
-        realTicker: "GOOG",
-        price: 178.22,
-        changePercent: 0.92,
-        trend: "Increasing",
-        slopeRate: 0.6,
-        maxima: 180.00,
-        minima: 176.40,
-        floor: 165
+        symbol: "GEG", company: "Geggol", realTicker: "GOOG",
+        price: 178.22, changePercent: 0.92, trend: "Increasing", slopeRate: 0.6,
+        maxima: 180.00, minima: 176.40, floor: 165, splitMultiplier: 1, recentlySplit: false
     ),
-
     Stock(
-        symbol: "BRZ",
-        company: "Bravozon",
-        realTicker: "AMZN",
-        price: 191.30,
-        changePercent: 0.64,
-        trend: "Increasing",
-        slopeRate: 0.3,
-        maxima: 193.00,
-        minima: 189.10,
-        floor: 180.00
+        symbol: "BRZ", company: "Bravozon", realTicker: "AMZN",
+        price: 191.30, changePercent: 0.64, trend: "Increasing", slopeRate: 0.3,
+        maxima: 193.00, minima: 189.10, floor: 180.00, splitMultiplier: 1, recentlySplit: false
     ),
-
     Stock(
-        symbol: "ATE",
-        company: "Atem systems",
-        realTicker: "META",
-        price: 578.90,
-        changePercent: -0.88,
-        trend: "Decreasing",
-        slopeRate: -0.5,
-        maxima: 585.00,
-        minima: 575.00,
-        floor: 550.00
+        symbol: "ATE", company: "Atem systems", realTicker: "META",
+        price: 578.90, changePercent: -0.88, trend: "Decreasing", slopeRate: -0.5,
+        maxima: 585.00, minima: 575.00, floor: 550.00, splitMultiplier: 1, recentlySplit: false
     ),
-
     Stock(
-        symbol: "SMD",
-        company: "Strong Mini Devices",
-        realTicker: "AMD",
-        price: 130.45,
-        changePercent: 1.82,
-        trend: "Increasing",
-        slopeRate: 0.7,
-        maxima: 133.20,
-        minima: 128.50,
-        floor: 125.00
+        symbol: "SMD", company: "Strong Mini Devices", realTicker: "AMD",
+        price: 130.45, changePercent: 1.82, trend: "Increasing", slopeRate: 0.7,
+        maxima: 133.20, minima: 128.50, floor: 125.00, splitMultiplier: 1, recentlySplit: false
     ),
-
     Stock(
-        symbol: "DST",
-        company: "Dollarstand",
-        realTicker: "COIN",
-        price: 242.15,
-        changePercent: 3.45,
-        trend: "Increasing",
-        slopeRate: 1.6,
-        maxima: 250.00,
-        minima: 234.00,
-        floor: 215.00
+        symbol: "DST", company: "Dollarstand", realTicker: "COIN",
+        price: 242.15, changePercent: 3.45, trend: "Increasing", slopeRate: 1.6,
+        maxima: 250.00, minima: 234.00, floor: 215.00, splitMultiplier: 1, recentlySplit: false
     ),
-
     Stock(
-        symbol: "PLY",
-        company: "Playbit",
-        realTicker: "RBLX",
-        price: 42.30,
-        changePercent: -2.10,
-        trend: "Decreasing",
-        slopeRate: -0.8,
-        maxima: 44.50,
-        minima: 41.00,
-        floor: 38.00
+        symbol: "PLY", company: "Playbit", realTicker: "RBLX",
+        price: 42.30, changePercent: -2.10, trend: "Decreasing", slopeRate: -0.8,
+        maxima: 44.50, minima: 41.00, floor: 38.00, splitMultiplier: 1, recentlySplit: false
     ),
 ]

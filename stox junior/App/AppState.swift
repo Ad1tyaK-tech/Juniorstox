@@ -34,6 +34,7 @@ class AppState: ObservableObject {
     @Published var purchasePrices: [String: Double] = [:]
     @Published var netWorthHistory: [NetWorthSnapshot] = []
     @Published var isRefreshing: Bool = false
+    @Published var appliedSplitMultipliers: [String: Int] = [:]
 
     // MARK: - Daily Challenge & Gems
     @Published var gems: Int = 0
