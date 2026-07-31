@@ -33,16 +33,50 @@ struct UserAccount: Codable {
         case settingsJSON        = "settings_json"
     }
 
-    init(username: String, passwordHash: String) {
+    // nonisolated so it's callable from any actor context (AccountService, etc.)
+    nonisolated init(username: String, passwordHash: String) {
         self.username     = username
         self.passwordHash = passwordHash
     }
 
-    func passwordMatches(_ input: String) -> Bool {
+    // Explicit implementations replace synthesized ones, removing @MainActor inference.
+    nonisolated init(from decoder: any Decoder) throws {
+        let c           = try decoder.container(keyedBy: CodingKeys.self)
+        username            = try c.decode(String.self, forKey: .username)
+        passwordHash        = try c.decode(String.self, forKey: .passwordHash)
+        cashBalance         = try c.decodeIfPresent(Double.self, forKey: .cashBalance)        ?? 10_000
+        startingBalance     = try c.decodeIfPresent(Double.self, forKey: .startingBalance)    ?? 10_000
+        sharesOwnedJSON     = try c.decodeIfPresent(String.self, forKey: .sharesOwnedJSON)    ?? "{}"
+        purchasePricesJSON  = try c.decodeIfPresent(String.self, forKey: .purchasePricesJSON) ?? "{}"
+        netWorthHistoryJSON = try c.decodeIfPresent(String.self, forKey: .netWorthHistoryJSON) ?? "[]"
+        lastSnapshotDate    = try c.decodeIfPresent(Date.self,   forKey: .lastSnapshotDate)   ?? .now
+        createdDate         = try c.decodeIfPresent(Date.self,   forKey: .createdDate)        ?? .now
+        dailyChallengeJSON  = try c.decodeIfPresent(String.self, forKey: .dailyChallengeJSON) ?? "{}"
+        achievementsJSON    = try c.decodeIfPresent(String.self, forKey: .achievementsJSON)   ?? "{}"
+        settingsJSON        = try c.decodeIfPresent(String.self, forKey: .settingsJSON)       ?? "{}"
+    }
+
+    nonisolated func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(username,            forKey: .username)
+        try c.encode(passwordHash,        forKey: .passwordHash)
+        try c.encode(cashBalance,         forKey: .cashBalance)
+        try c.encode(startingBalance,     forKey: .startingBalance)
+        try c.encode(sharesOwnedJSON,     forKey: .sharesOwnedJSON)
+        try c.encode(purchasePricesJSON,  forKey: .purchasePricesJSON)
+        try c.encode(netWorthHistoryJSON, forKey: .netWorthHistoryJSON)
+        try c.encode(lastSnapshotDate,    forKey: .lastSnapshotDate)
+        try c.encode(createdDate,         forKey: .createdDate)
+        try c.encode(dailyChallengeJSON,  forKey: .dailyChallengeJSON)
+        try c.encode(achievementsJSON,    forKey: .achievementsJSON)
+        try c.encode(settingsJSON,        forKey: .settingsJSON)
+    }
+
+    nonisolated func passwordMatches(_ input: String) -> Bool {
         Self.hash(input) == passwordHash
     }
 
-    static func hash(_ text: String) -> String {
+    nonisolated static func hash(_ text: String) -> String {
         let digest = SHA256.hash(data: Data(text.utf8))
         return digest.compactMap { String(format: "%02x", $0) }.joined()
     }

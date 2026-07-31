@@ -121,18 +121,22 @@ struct StockService {
         let openShockPercent = openRoll * volMult           // display-percent change from opening roll
         let openShockPrice   = seeded * (openShockPercent / 100.0)
 
-        // Price: seeded anchor + opening shock + intraday noise + momentum drift.
-        let bias = dailyReturn >= 0 ? 1.0 : -1.0
-        let normalTick = Double.random(in: -maxTick...maxTick) * 0.3
-                       + bias * Double.random(in: 0...maxTick * 0.3)
-        let amplifier: Double = Double.random(in: 0..<1) < 0.10
-            ? Double.random(in: -10...10)
-            : 0
-        let shockImpact  = seeded * (amplifier * 0.006)
-        let displayPrice = max(1.0, seeded + openShockPrice + normalTick + shockImpact + momentumPriceImpact)
+        // stablePrice: fully seeded — same for every user/refresh within a calendar day.
+        // Used for changePercent so the daily change figure is meaningful and AI insights stay coherent.
+        let bias        = dailyReturn >= 0 ? 1.0 : -1.0
+        let seededTick  = seededIntradayTick(ticker: alias.realTicker, dateString: dateString, base: seeded)
+        let shockImpact = seededShockImpact(ticker: alias.realTicker, dateString: dateString, base: seeded)
+        let stablePrice = max(1.0, seeded + openShockPrice + seededTick + shockImpact + momentumPriceImpact)
 
-        // True day-over-day percentage change: how much did the price move vs yesterday's close.
-        let changePercent = floor > 0 ? ((displayPrice - floor) / floor) * 100.0 : 0.0
+        // True day-over-day percentage change: computed from the stable price only.
+        // Resets each calendar day; does not fluctuate with the intraday random tick.
+        let changePercent = floor > 0 ? ((stablePrice - floor) / floor) * 100.0 : 0.0
+
+        // displayPrice adds a random tick so the price visibly moves on each hourly refresh.
+        let rawRandom   = Double.random(in: -maxTick...maxTick) * 0.3
+                        + bias * Double.random(in: 0...maxTick * 0.3)
+        let randomTick  = min(5.0, max(-5.0, rawRandom))
+        let displayPrice = max(1.0, stablePrice + randomTick)
         let slopeRate     = changePercent / 5.0
 
         return Stock(
@@ -184,9 +188,9 @@ struct StockService {
         compoundedInfo(ticker: ticker, to: dateString).price
     }
 
-    // LCG + Box-Muller → N(0, 0.015).
+    // LCG + Box-Muller → N(drift, vol).
     // Seeded by ticker + date so all users see the same price direction on the same day.
-    // Daily vol of 1.5% is realistic for large-cap stocks; amplified 3× for display.
+    // vol 2.2%/day (~35% annualised) gives noticeable swings; +0.0003 drift ≈ +8% annual.
     private func seededDailyReturn(ticker: String, dateString: String) -> Double {
         var s = (ticker + dateString).unicodeScalars
             .reduce(UInt64(0)) { $0 &* 31 &+ UInt64($1.value) } | 1
@@ -194,7 +198,17 @@ struct StockService {
         let u1 = max(1e-10, Double(s >> 33) / Double(UInt64(1) << 31))
         s = s &* 6364136223846793005 &+ 1442695040888963407
         let u2 = Double(s >> 33) / Double(UInt64(1) << 31)
-        return sqrt(-2.0 * log(u1)) * cos(2.0 * .pi * u2) * 0.015
+        return sqrt(-2.0 * log(u1)) * cos(2.0 * .pi * u2) * 0.022 + 0.0003
+    }
+
+    // Deterministic intraday nudge in [-1.5%, +1.5%] of the seeded price.
+    // Stable across refreshes so users can't fish for a lucky random spike.
+    private func seededIntradayTick(ticker: String, dateString: String, base: Double) -> Double {
+        var s = (ticker + dateString + "noon").unicodeScalars
+            .reduce(UInt64(0)) { $0 &* 31 &+ UInt64($1.value) } | 1
+        s = s &* 6364136223846793005 &+ 1442695040888963407
+        let u = Double(s >> 33) / Double(UInt64(1) << 31) // [0, 2)
+        return base * (u - 1.0) * 0.015                   // ±1.5% of price
     }
 
     // LCG-seeded uniform roll in [-10, 10] for (ticker, date).
@@ -205,6 +219,19 @@ struct StockService {
         s = s &* 6364136223846793005 &+ 1442695040888963407
         let u = Double(s >> 33) / Double(UInt64(1) << 31) // [0, 2)
         return (u - 1.0) * 10.0                           // [-10, 10)
+    }
+
+    // Seeded shock: 10% chance of a ±6% price jolt, stable per (ticker, date).
+    private func seededShockImpact(ticker: String, dateString: String, base: Double) -> Double {
+        var s = (ticker + dateString + "shock").unicodeScalars
+            .reduce(UInt64(0)) { $0 &* 31 &+ UInt64($1.value) } | 1
+        s = s &* 6364136223846793005 &+ 1442695040888963407
+        let u1 = Double(s >> 33) / Double(UInt64(1) << 31)  // [0, 1)
+        guard u1 < 0.10 else { return 0.0 }
+        s = s &* 6364136223846793005 &+ 1442695040888963407
+        let u2 = Double(s >> 33) / Double(UInt64(1) << 31)  // [0, 1)
+        let amplifier = u2 * 20.0 - 10.0                    // [-10, 10)
+        return base * (amplifier * 0.006)
     }
 
     // Maps a stock's base price to a volatility multiplier.

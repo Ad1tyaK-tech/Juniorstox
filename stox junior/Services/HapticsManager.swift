@@ -1,5 +1,6 @@
 import UIKit
 
+
 struct HapticsManager {
     static var isDisabled: Bool = false
 

@@ -9,12 +9,13 @@ struct SellSheet: View {
 
     @State private var shares: Int = 1
 
-    private var sharesOwned: Int  { appState.sharesOwned[stock.realTicker] ?? 0 }
-    private var buyPrice: Double  { appState.purchasePrices[stock.realTicker] ?? stock.price }
-    private var proceeds: Double  { stock.price * Double(shares) }
-    private var pnlPerShare: Double { stock.price - buyPrice }
-    private var totalPnL: Double  { pnlPerShare * Double(shares) }
-    private var pnlColor: Color   { totalPnL >= 0 ? AppColors.gain : AppColors.loss }
+    private var sharesOwned: Int   { appState.sharesOwned[stock.realTicker] ?? 0 }
+    private var currentPrice: Double { appState.marketStocks.first { $0.realTicker == stock.realTicker }?.price ?? stock.price }
+    private var buyPrice: Double   { appState.purchasePrices[stock.realTicker] ?? currentPrice }
+    private var proceeds: Double   { currentPrice * Double(shares) }
+    private var pnlPerShare: Double { currentPrice - buyPrice }
+    private var totalPnL: Double   { pnlPerShare * Double(shares) }
+    private var pnlColor: Color    { totalPnL >= 0 ? AppColors.gain : AppColors.loss }
 
     private func money(_ value: Double, sign: Bool = false) -> String {
         let prefix = sign ? (value >= 0 ? "+$" : "-$") : "$"
@@ -43,7 +44,7 @@ struct SellSheet: View {
                         Text(stock.symbol)
                             .foregroundColor(AppColors.textSecondary)
                         HStack {
-                            Text("Now: \(money(stock.price))/share")
+                            Text("Now: \(money(currentPrice))/share")
                                 .font(.subheadline)
                                 .foregroundColor(AppColors.textPrimary)
                             Spacer()

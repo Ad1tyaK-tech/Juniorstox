@@ -13,6 +13,7 @@ struct InfoView: View {
                     faqSection(title: "Portfolio",     icon: "briefcase.fill",      items: portfolioFAQ)
                     faqSection(title: "Achievements",  icon: "trophy.fill",         items: achievementsFAQ)
                     faqSection(title: "Account & Security", icon: "lock.shield.fill", items: accountFAQ)
+                    contactSection
                     disclaimer
                 }
                 .padding()
@@ -71,6 +72,52 @@ struct InfoView: View {
                     .stroke(AppColors.cardBorder, lineWidth: 1)
             )
         }
+    }
+
+    // MARK: - Contact
+
+    private var contactSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: "envelope.fill")
+                    .foregroundColor(AppColors.accent)
+                Text("Contact & Privacy")
+                    .font(.headline)
+                    .foregroundColor(AppColors.textPrimary)
+            }
+            Text("Questions about your data, privacy, or the app? Reach out:")
+                .font(.subheadline)
+                .foregroundColor(AppColors.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Link(destination: URL(string: "mailto:adityakiran0123@gmail.com")!) {
+                HStack(spacing: 6) {
+                    Image(systemName: "envelope")
+                        .font(.subheadline)
+                    Text("adityakiran0123@gmail.com")
+                        .font(.subheadline.weight(.medium))
+                        .underline()
+                }
+                .foregroundColor(AppColors.accent)
+            }
+            Link(destination: URL(string: "https://ad1tya-tech.github.io/Juniorstox/")!) {
+                HStack(spacing: 6) {
+                    Image(systemName: "globe")
+                        .font(.subheadline)
+                    Text("ad1tya-tech.github.io/Juniorstox")
+                        .font(.subheadline.weight(.medium))
+                        .underline()
+                }
+                .foregroundColor(AppColors.accent)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppColors.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(AppColors.cardBorder, lineWidth: 1)
+        )
     }
 
     // MARK: - Disclaimer

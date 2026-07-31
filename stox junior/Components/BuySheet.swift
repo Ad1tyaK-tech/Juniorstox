@@ -10,6 +10,7 @@ struct BuySheet: View {
     @State private var shares: Int = 1
 
     private var cashBalanceDollars: Double { Double(appState.cashBalance) / 100.0 }
+    private var maxAffordable: Int { Int(cashBalanceDollars / stock.price) }
     private var totalCost: Double { stock.price * Double(shares) }
     private var remaining: Double { cashBalanceDollars - totalCost }
     private var canAfford: Bool { totalCost <= cashBalanceDollars }
@@ -76,6 +77,21 @@ struct BuySheet: View {
                                     .background(AppColors.inputBackground)
                             }
                             .disabled(!canAddShare)
+
+                            Rectangle()
+                                .fill(AppColors.cardBorder)
+                                .frame(width: 1, height: 30)
+
+                            Button {
+                                shares = maxAffordable
+                            } label: {
+                                Text("Max")
+                                    .font(.caption.bold())
+                                    .foregroundColor(shares < maxAffordable ? AppColors.textPrimary : AppColors.textTertiary)
+                                    .frame(width: 52, height: 52)
+                                    .background(AppColors.inputBackground)
+                            }
+                            .disabled(shares >= maxAffordable)
                         }
                         .sensoryFeedback(.impact(weight: .light, intensity: 0.7), trigger: shares)
                         .clipShape(RoundedRectangle(cornerRadius: 14))

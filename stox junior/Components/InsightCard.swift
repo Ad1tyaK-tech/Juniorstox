@@ -59,20 +59,20 @@ struct PortfolioInsightCard: View {
             return (
                 "👋",
                 "Hey \(firstName)!",
-                "You've got $\(String(format: "%.0f", netWorth)) ready to invest. Head to the Market tab and grab your first stock!",
+                "You've got lots of money ready to invest. Head to the Market tab and grab your first stock!",
                 .blue
             )
         }
 
         // Big milestone celebrations (checked before anything else)
         if gainPct >= 50 {
-            return ("🏆", "Portfolio Legend!", "You've grown your money by \(String(format: "%.1f", gainPct))%! That's seriously impressive, \(firstName).", .yellow)
+            return ("🏆", "Portfolio Legend!", "You've grown your money to pheonomenally high levels. That's seriously impressive, \(firstName).", .yellow)
         }
         if gainPct >= 20 {
-            return ("🎉", "Big Gains!", "Up \(String(format: "%.1f", gainPct))% from where you started. You're on fire!", .orange)
+            return ("🎉", "Big Gains!", "You're up from where you started. You're on fire!", .orange)
         }
         if gainPct >= 10 {
-            return ("🚀", "Nice Work!", "Your portfolio grew \(String(format: "%.1f", gainPct))% since you started. Keep it rolling!", .green)
+            return ("🚀", "Nice Work!", "Your portfolio grew since you started. Keep it rolling!", .green)
         }
 
         // Would-have / could-have (~1 in 3 refreshes when a good stock is being missed)
@@ -91,9 +91,9 @@ struct PortfolioInsightCard: View {
         // Positive gain — rotate encouraging messages
         if gain > 0 {
             let options: [(String, String, String)] = [
-                ("📈", "Looking good!", "You're up $\(String(format: "%.2f", gain)) since you started. You're a natural, \(firstName)!"),
-                ("💰", "Money maker!", "Your portfolio has grown $\(String(format: "%.2f", gain)). Imagine where you'll be in a year!"),
-                ("⭐", "Star investor!", "Up \(String(format: "%.1f", gainPct))% from your starting balance. Nice moves!"),
+                ("📈", "Looking good!", "You're up a little bit since you started. You're a natural, \(firstName)!"),
+                ("💰", "Money maker!", "Your portfolio has been growing. Imagine where you'll be in a year!"),
+                ("⭐", "Star investor!", "Nice moves!"),
             ]
             let pick = options[roll % options.count]
             return (pick.0, pick.1, pick.2, .green)

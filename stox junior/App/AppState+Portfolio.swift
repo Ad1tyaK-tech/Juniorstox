@@ -45,10 +45,11 @@ extension AppState {
     }
 
     func sellStock(_ stock: Stock, shares: Int) {
-        let buyPrice = purchasePrices[stock.realTicker] ?? stock.price
-        cashBalance += Int((stock.price * Double(shares) * 100).rounded())
-        if stock.price > buyPrice { profitSells += 1 }
-        else if stock.price < buyPrice { lossSells += 1 }
+        let livePrice = marketStocks.first { $0.realTicker == stock.realTicker }?.price ?? stock.price
+        let buyPrice  = purchasePrices[stock.realTicker] ?? livePrice
+        cashBalance += Int((livePrice * Double(shares) * 100).rounded())
+        if livePrice > buyPrice { profitSells += 1 }
+        else if livePrice < buyPrice { lossSells += 1 }
         let remaining = (sharesOwned[stock.realTicker] ?? 0) - shares
         if remaining <= 0 {
             sharesOwned.removeValue(forKey: stock.realTicker)
