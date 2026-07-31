@@ -99,11 +99,11 @@ struct InfoView: View {
                 }
                 .foregroundColor(AppColors.accent)
             }
-            Link(destination: URL(string: "https://ad1tya-tech.github.io/Juniorstox/")!) {
+            Link(destination: URL(string: "https://ad1tyak-tech.github.io/Juniorstox/")!) {
                 HStack(spacing: 6) {
                     Image(systemName: "globe")
                         .font(.subheadline)
-                    Text("ad1tya-tech.github.io/Juniorstox")
+                    Text("ad1tyak-tech.github.io/Juniorstox")
                         .font(.subheadline.weight(.medium))
                         .underline()
                 }
