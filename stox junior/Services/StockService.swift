@@ -13,7 +13,7 @@ enum StockServiceError: Error {
 struct StockService {
 
     // Max random intraday tick (±$) added when generating fresh prices.
-    private let maxTick: Double = 18.0
+    private let maxTick: Double = 26.0
 
     // allowsCellularAccess kept for API compatibility with AppState's settings toggle.
     init(allowsCellularAccess: Bool = true) {}
@@ -128,14 +128,15 @@ struct StockService {
         let shockImpact = seededShockImpact(ticker: alias.realTicker, dateString: dateString, base: seeded)
         let stablePrice = max(1.0, seeded + openShockPrice + seededTick + shockImpact + momentumPriceImpact)
 
-        // True day-over-day percentage change: computed from the stable price only.
-        // Resets each calendar day; does not fluctuate with the intraday random tick.
-        let changePercent = floor > 0 ? ((stablePrice - floor) / floor) * 100.0 : 0.0
+        // True day-over-day percentage change: seeded compounded price vs yesterday's close.
+        // Using only `seeded` (not stablePrice) keeps the figure realistic — open shock,
+        // momentum, and intraday ticks are display effects, not fundamental daily moves.
+        let changePercent = floor > 0 ? ((seeded - floor) / floor) * 100.0 : 0.0
 
         // displayPrice adds a random tick so the price visibly moves on each hourly refresh.
-        let rawRandom   = Double.random(in: -maxTick...maxTick) * 0.3
-                        + bias * Double.random(in: 0...maxTick * 0.3)
-        let randomTick  = min(5.0, max(-5.0, rawRandom))
+        let rawRandom   = Double.random(in: -maxTick...maxTick) * 0.45
+                        + bias * Double.random(in: 0...maxTick * 0.45)
+        let randomTick  = min(4.0, max(-4.0, rawRandom))
         let displayPrice = max(1.0, stablePrice + randomTick)
         let slopeRate     = changePercent / 5.0
 
@@ -190,7 +191,7 @@ struct StockService {
 
     // LCG + Box-Muller → N(drift, vol).
     // Seeded by ticker + date so all users see the same price direction on the same day.
-    // vol 2.2%/day (~35% annualised) gives noticeable swings; +0.0003 drift ≈ +8% annual.
+    // vol 2.2%/day (~35% annualised) gives noticeable swings; +0.0012 drift ≈ +31% annual.
     private func seededDailyReturn(ticker: String, dateString: String) -> Double {
         var s = (ticker + dateString).unicodeScalars
             .reduce(UInt64(0)) { $0 &* 31 &+ UInt64($1.value) } | 1
@@ -198,7 +199,7 @@ struct StockService {
         let u1 = max(1e-10, Double(s >> 33) / Double(UInt64(1) << 31))
         s = s &* 6364136223846793005 &+ 1442695040888963407
         let u2 = Double(s >> 33) / Double(UInt64(1) << 31)
-        return sqrt(-2.0 * log(u1)) * cos(2.0 * .pi * u2) * 0.022 + 0.0003
+        return sqrt(-2.0 * log(u1)) * cos(2.0 * .pi * u2) * 0.022 + 0.0012
     }
 
     // Deterministic intraday nudge in [-1.5%, +1.5%] of the seeded price.

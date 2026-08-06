@@ -52,11 +52,11 @@ struct AchievementDef: Identifiable {
         switch id {
         case "diversePortfolio": return "Buy \(n)+ shares in 8+ different stocks"
         case "investor":         return "Hold \(n)+ shares in one stock at once"
-        case "gambler":          return "Buy \(n)+ shares in volatile stocks (±2% today)"
+        case "gambler":          return "Buy \(n)+ shares in volatile stocks (±5% today)"
         case "intellectual":     return "Open the advanced info screen \(n)+ times"
         case "spontaneous":      return "Use Quick Buy \(n)+ times"
         case "safeInvestor":     return "Buy \(n)+ shares of steady stocks"
-        case "momentumBuyer":    return "Buy \(n)+ shares in fast-rising stocks (+2% today)"
+        case "momentumBuyer":    return "Buy \(n)+ shares in fast-rising stocks (+4% today)"
         case "bargainer":        return "Buy \(n)+ shares near a stock's floor price"
         case "tookProfit":       return "Sell a stock at a profit \(n)+ times"
         case "cutLosses":        return "Sell a stock at a loss \(n)+ times"

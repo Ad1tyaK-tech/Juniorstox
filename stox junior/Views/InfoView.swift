@@ -89,11 +89,11 @@ struct InfoView: View {
                 .font(.subheadline)
                 .foregroundColor(AppColors.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
-            Link(destination: URL(string: "mailto:adityakiran0123@gmail.com")!) {
+            Link(destination: URL(string: "mailto:juniorstox.support@gmail.com")!) {
                 HStack(spacing: 6) {
                     Image(systemName: "envelope")
                         .font(.subheadline)
-                    Text("adityakiran0123@gmail.com")
+                    Text("juniorstox.support@gmail.com")
                         .font(.subheadline.weight(.medium))
                         .underline()
                 }
@@ -123,7 +123,7 @@ struct InfoView: View {
     // MARK: - Disclaimer
 
     private var disclaimer: some View {
-        Text("Prices may be delayed up to 15 minutes. Stox Junior is for learning purposes only and does not constitute financial advice.")
+        Text("Stox Junior is for learning purposes only and does not constitute financial advice.")
             .font(.caption)
             .foregroundColor(AppColors.textTertiary)
             .multilineTextAlignment(.center)
@@ -182,7 +182,7 @@ struct InfoView: View {
         ),
         FAQItem(
             question: "Are these real stock prices?",
-            answer: "Yes — prices are pulled from live market data but may be delayed up to 15 minutes. Pull down on the Market page to force a refresh."
+            answer: "No these prices are entirely simulated based on seeded tickers. They are not based on real-time stock data. They're generated randomly and change over time."
         ),
         FAQItem(
             question: "What does the % change mean?",
@@ -194,7 +194,7 @@ struct InfoView: View {
         ),
         FAQItem(
             question: "Why do prices shift slightly every refresh?",
-            answer: "To keep the app more exciting, Stox Junior adds a small simulated price variation on top of real market data each time you refresh. This makes prices feel more active and dynamic. The direction (up or down) always matches the real market — only the exact dollar amount varies slightly. Real-world prices for these stocks won't show this same tick."
+            answer: "To keep the app more exciting, Stox Junior adds a small simulated price variation on top of the hourly simulated market data each time you refresh. This makes prices feel more active and dynamic. Real-world stock market won't show this same tick."
         ),
     ]
 

@@ -34,9 +34,9 @@ extension AppState {
         // Achievement counters updated before snapshot so they're included in the save
         allTimeOwnedTickers.insert(stock.realTicker)
         maxSharesInOneTicker = max(maxSharesInOneTicker, sharesOwned[stock.realTicker, default: 0])
-        if abs(stock.changePercent) >= 2.0              { volatileSharesBought  += shares }
+        if abs(stock.changePercent) >= 5.0              { volatileSharesBought  += shares }
         if abs(stock.changePercent) < 1.0 && stock.slopeRate > 0 { steadySharesBought += shares }
-        if stock.changePercent >= 2.0                   { momentumSharesBought  += shares }
+        if stock.changePercent >= 4.0                   { momentumSharesBought  += shares }
         if stock.price <= stock.floor * 1.05            { floorSharesBought     += shares }
 
         snapshotNetWorth()
