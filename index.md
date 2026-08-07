@@ -97,4 +97,4 @@ When changes are made, the **“Last Updated”** date at the top of this policy
 
 If you have questions, concerns, or requests regarding this Privacy Policy or the information handled by Stox Junior, please contact us at:
 
-**Email:** [adityakiran0123@gmail.com](mailto:adityakiran0123@gmail.com)
+**Email:** [juniorstox.support@gmail.com](mailto:juniorstox.support@gmail.com)
