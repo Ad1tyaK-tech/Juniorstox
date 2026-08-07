@@ -9,7 +9,8 @@ extension AppState {
         var ownedAvatarIds: [String] = []
         var hapticsDisabled: Bool = false
         var blockCellularData: Bool = false
-        var linkedEmail: String = ""
+        var keycodeHash: String = ""    // SHA-256 of recovery keycode
+        var linkedEmail: String = ""    // legacy plaintext field — read for migration only
         var colorSchemePref: String = "light"
     }
 
@@ -28,9 +29,16 @@ extension AppState {
         ownedAvatarIds    = Set(state.ownedAvatarIds)
         hapticsDisabled   = state.hapticsDisabled
         blockCellularData = state.blockCellularData
-        linkedEmail       = state.linkedEmail
         colorSchemePref   = state.colorSchemePref
         SoundManager.isDisabled = state.hapticsDisabled
+        // Prefer the new hash field; migrate legacy plaintext on first load (saved as hash on next write)
+        if !state.keycodeHash.isEmpty {
+            keycodeHash = state.keycodeHash
+        } else if !state.linkedEmail.isEmpty {
+            keycodeHash = UserAccount.hash(state.linkedEmail)
+        } else {
+            keycodeHash = ""
+        }
     }
 
     func encodeSettingsState() -> String {
@@ -39,7 +47,8 @@ extension AppState {
             ownedAvatarIds:    Array(ownedAvatarIds),
             hapticsDisabled:   hapticsDisabled,
             blockCellularData: blockCellularData,
-            linkedEmail:       linkedEmail,
+            keycodeHash:       keycodeHash,
+            linkedEmail:       "",              // legacy field always empty in new saves
             colorSchemePref:   colorSchemePref
         )
         return encode(state) ?? "{}"

@@ -172,7 +172,7 @@ private struct AchievementCard: View {
             prevClaimed = appState.isTierClaimed(id: def.id, tier: prev)
         }
         guard prevClaimed else { return .locked }
-        return progress >= def.threshold(for: tier) ? .claimable : .active
+        return appState.isTierClaimable(id: def.id, tier: tier) ? .claimable : .active
     }
 
     // First tier that is ready to claim (threshold met, previous claimed, not yet claimed)

@@ -76,8 +76,10 @@ class AppState: ObservableObject {
     @Published var blockCellularData: Bool = false {
         didSet { stockService = StockService(allowsCellularAccess: !blockCellularData) }
     }
-    @Published var linkedEmail: String = ""
+    @Published var keycodeHash: String = ""    // SHA-256 of recovery keycode — never raw
     @Published var colorSchemePref: String = "light"
+
+    var keycodeIsSet: Bool { !keycodeHash.isEmpty }
 
     // MARK: - Shared state
     var pendingSaveTask: Task<Void, Never>? = nil

@@ -54,6 +54,7 @@ extension AppState {
         account.sharesOwnedJSON     = encode(sharesOwned) ?? "{}"
         account.purchasePricesJSON  = encode(purchasePrices) ?? "{}"
         account.netWorthHistoryJSON = encode(netWorthHistory) ?? "[]"
+        account.keycodeHash         = keycodeHash
         account.dailyChallengeJSON  = encodeChallengeState()
         account.achievementsJSON    = encodeAchievementsState()
         account.settingsJSON        = encodeSettingsState()

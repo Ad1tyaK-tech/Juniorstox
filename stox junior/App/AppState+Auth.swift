@@ -5,21 +5,31 @@ extension AppState {
     // MARK: - Supabase Auth helpers (called by auth views)
 
     func attemptLogin(username: String, password: String) async throws {
-        let account = try await accountService.login(username: username, password: password)
+        let account = try await accountService.login(
+            username: username,
+            password: password
+        )
         UserDefaults.standard.set(account.username, forKey: "session.username")
         loadFrom(account)
         authState = .loggedIn
     }
 
-    func attemptCreateAccount(username: String, password: String, email: String) async throws {
-        if !email.isEmpty, try await accountService.isEmailTaken(email) {
+    func attemptCreateAccount(username: String, password: String, email: String)
+        async throws
+    {
+        if !email.isEmpty,
+            try await accountService.isKeycodeTaken(UserAccount.hash(email))
+        {
             throw AccountError.emailTaken
         }
-        let account = try await accountService.createAccount(username: username, password: password)
+        let account = try await accountService.createAccount(
+            username: username,
+            password: password
+        )
         UserDefaults.standard.set(account.username, forKey: "session.username")
         loadFrom(account)
         if !email.isEmpty {
-            linkedEmail = email
+            keycodeHash = UserAccount.hash(email)
             saveToAccount()
         }
         authState = .privacyConsent
@@ -73,7 +83,7 @@ extension AppState {
         ownedAvatarIds = []
         hapticsDisabled = false
         blockCellularData = false
-        linkedEmail = ""
+        keycodeHash = ""
         colorSchemePref = "light"
         HapticsManager.isDisabled = false
         SoundManager.isDisabled = false

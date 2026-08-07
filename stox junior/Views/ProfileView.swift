@@ -258,13 +258,10 @@ struct ProfileView: View {
                         Text("Account Recovery")
                             .foregroundColor(AppColors.textPrimary)
                         Spacer()
-                        if !appState.linkedEmail.isEmpty {
-                            Text(appState.linkedEmail)
-                                .font(.caption)
-                                .foregroundColor(AppColors.textSecondary)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                                .frame(maxWidth: 130)
+                        if appState.keycodeIsSet {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.caption.bold())
+                                .foregroundColor(AppColors.gain)
                         }
                         Image(systemName: "chevron.right")
                             .font(.caption.bold())
@@ -633,18 +630,21 @@ private struct LinkEmailSheet: View {
                 }
             }
         }
-        .onAppear { emailInput = appState.linkedEmail }
+        .onAppear { emailInput = "" }  // raw keycode is never stored in memory — user re-enters to change
     }
 
     private func saveEmail() {
         let normalized = emailInput.trimmingCharacters(in: .whitespaces)
+        guard !normalized.isEmpty else { return }
+        let newHash = UserAccount.hash(normalized)
         Task {
-            if normalized.lowercased() != appState.linkedEmail.lowercased(),
-               (try? await appState.accountService.isEmailTaken(normalized)) == true {
-                errorMessage = "That email is already linked to another account."
+            // Skip uniqueness check if this hash is already the one set for this account
+            if newHash != appState.keycodeHash,
+               (try? await appState.accountService.isKeycodeTaken(newHash)) == true {
+                errorMessage = "That keycode is already linked to another account."
                 return
             }
-            appState.linkedEmail = normalized
+            appState.keycodeHash = newHash
             appState.saveToAccount()
             dismiss()
         }

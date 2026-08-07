@@ -340,7 +340,7 @@ struct ForgotPasswordView: View {
         errorMessage = nil
         Task {
             do {
-                if let match = try await appState.accountService.findByEmail(trimmed) {
+                if let match = try await appState.accountService.findByKeycode(UserAccount.hash(trimmed)) {
                     limiter.reset()
                     foundAccount = match
                 } else {

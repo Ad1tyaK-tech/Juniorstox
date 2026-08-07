@@ -7,6 +7,7 @@ struct UserAccount: Codable {
 
     var username: String
     var passwordHash: String
+    var keycodeHash: String = ""    // SHA-256 of recovery keycode; mirrors the keycode_hash column for fast lookup
     var cashBalance: Double = 10_000
     var startingBalance: Double = 10_000
     var sharesOwnedJSON: String = "{}"
@@ -21,6 +22,7 @@ struct UserAccount: Codable {
     enum CodingKeys: String, CodingKey {
         case username
         case passwordHash        = "password_hash"
+        case keycodeHash         = "keycode_hash"
         case cashBalance         = "cash_balance"
         case startingBalance     = "starting_balance"
         case sharesOwnedJSON     = "shares_owned_json"
@@ -44,6 +46,7 @@ struct UserAccount: Codable {
         let c           = try decoder.container(keyedBy: CodingKeys.self)
         username            = try c.decode(String.self, forKey: .username)
         passwordHash        = try c.decode(String.self, forKey: .passwordHash)
+        keycodeHash         = try c.decodeIfPresent(String.self, forKey: .keycodeHash)        ?? ""
         cashBalance         = try c.decodeIfPresent(Double.self, forKey: .cashBalance)        ?? 10_000
         startingBalance     = try c.decodeIfPresent(Double.self, forKey: .startingBalance)    ?? 10_000
         sharesOwnedJSON     = try c.decodeIfPresent(String.self, forKey: .sharesOwnedJSON)    ?? "{}"
@@ -60,6 +63,7 @@ struct UserAccount: Codable {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(username,            forKey: .username)
         try c.encode(passwordHash,        forKey: .passwordHash)
+        try c.encode(keycodeHash,         forKey: .keycodeHash)
         try c.encode(cashBalance,         forKey: .cashBalance)
         try c.encode(startingBalance,     forKey: .startingBalance)
         try c.encode(sharesOwnedJSON,     forKey: .sharesOwnedJSON)

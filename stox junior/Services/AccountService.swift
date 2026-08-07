@@ -8,6 +8,7 @@ enum AccountError: LocalizedError {
     case usernameTaken
     case emailTaken
     case decodingFailed
+    case rpcError(String)
 
     var errorDescription: String? {
         switch self {
@@ -18,6 +19,7 @@ enum AccountError: LocalizedError {
         case .usernameTaken:    return "That name is already taken. Try a different one."
         case .emailTaken:       return "That email is already linked to another account."
         case .decodingFailed:   return "Could not read account data."
+        case .rpcError:         return "Server error. Please try again."
         }
     }
 }
@@ -60,10 +62,17 @@ actor AccountService {
     // MARK: - Auth
 
     func login(username: String, password: String) async throws -> UserAccount {
-        let rows: [UserAccount] = try await fetch("accounts?username=eq.\(pct(username))&select=*")
-        guard let account = rows.first else { throw AccountError.notFound }
-        guard account.passwordMatches(password) else { throw AccountError.wrongPassword }
-        return account
+        do {
+            let rows: [UserAccount] = try await rpc("login_account", body: ["p_username": username, "p_password": password])
+            guard let account = rows.first else { throw AccountError.wrongPassword }
+            return account
+        } catch AccountError.rpcError(let msg) {
+            switch msg {
+            case "not_found":      throw AccountError.notFound
+            case "wrong_password": throw AccountError.wrongPassword
+            default:               throw AccountError.network(0)
+            }
+        }
     }
 
     // Re-fetches account data for a user who already authenticated in a prior session.
@@ -75,14 +84,13 @@ actor AccountService {
     }
 
     func createAccount(username: String, password: String) async throws -> UserAccount {
-        // Uniqueness check
-        let existing: [[String: String]] = try await fetch(
-            "accounts?username=eq.\(pct(username))&select=username"
-        )
-        guard existing.isEmpty else { throw AccountError.usernameTaken }
-
-        let account = UserAccount(username: username, passwordHash: UserAccount.hash(password))
-        return try await insert(account)
+        do {
+            let rows: [UserAccount] = try await rpc("create_account", body: ["p_username": username, "p_password": password])
+            guard let created = rows.first else { throw AccountError.decodingFailed }
+            return created
+        } catch AccountError.rpcError(let msg) where msg == "username_taken" {
+            throw AccountError.usernameTaken
+        }
     }
 
     // MARK: - Persistence
@@ -107,23 +115,35 @@ actor AccountService {
 
     // MARK: - Password Recovery
 
-    // Fetches the account whose settingsJSON contains the given email (stored as linkedEmail).
-    func findByEmail(_ email: String) async throws -> UserAccount? {
-        let all: [UserAccount] = try await fetch("accounts?select=*")
-        let target = email.trimmingCharacters(in: .whitespaces).lowercased()
-        struct EmailCheck: Decodable { var linkedEmail: String = "" }
-        return all.first {
-            guard let d = $0.settingsJSON.data(using: .utf8),
-                  let c = try? JSONDecoder().decode(EmailCheck.self, from: d) else { return false }
-            return c.linkedEmail.trimmingCharacters(in: .whitespaces).lowercased() == target
-        }
+    // Finds the account with a matching keycode_hash column (indexed — no full table scan).
+    // Accepts the already-hashed value — raw keycodes must never be passed here.
+    func findByKeycode(_ hash: String) async throws -> UserAccount? {
+        guard !hash.isEmpty else { return nil }
+        let rows: [UserAccount] = try await fetch("accounts?keycode_hash=eq.\(pct(hash))&select=*")
+        return rows.first
     }
 
-    func isEmailTaken(_ email: String) async throws -> Bool {
-        try await findByEmail(email) != nil
+    func isKeycodeTaken(_ hash: String) async throws -> Bool {
+        try await findByKeycode(hash) != nil
     }
 
     // MARK: - Helpers
+
+    private func rpc<T: Decodable>(_ name: String, body: [String: String]) async throws -> T {
+        guard let url = URL(string: "\(base)/rest/v1/rpc/\(name)") else { throw AccountError.badURL }
+        var req = baseRequest(url, method: "POST")
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (data, resp) = try await session.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            if let errBody = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let msg = errBody["message"] as? String {
+                throw AccountError.rpcError(msg)
+            }
+            throw AccountError.network(http.statusCode)
+        }
+        guard let result = try? decoder.decode(T.self, from: data) else { throw AccountError.decodingFailed }
+        return result
+    }
 
     private func fetch<T: Decodable>(_ path: String) async throws -> T {
         guard let url = URL(string: "\(base)/rest/v1/\(path)") else { throw AccountError.badURL }
