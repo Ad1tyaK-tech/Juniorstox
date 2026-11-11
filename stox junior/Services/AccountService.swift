@@ -9,6 +9,7 @@ enum AccountError: LocalizedError {
     case emailTaken
     case decodingFailed
     case rpcError(String)
+    case unauthorized   // no session token, or token expired/invalid on the server
 
     var errorDescription: String? {
         switch self {
@@ -20,11 +21,13 @@ enum AccountError: LocalizedError {
         case .emailTaken:       return "That email is already linked to another account."
         case .decodingFailed:   return "Could not read account data."
         case .rpcError:         return "Server error. Please try again."
+        case .unauthorized:     return "Session expired. Please log in again."
         }
     }
 }
 
 // Actor — all Supabase account operations, thread-safe.
+// Every operation goes through a SECURITY DEFINER RPC; no direct table access.
 actor AccountService {
 
     private let base:    String
@@ -34,9 +37,21 @@ actor AccountService {
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
 
+    // Session token stored here and mirrored to UserDefaults so it survives app restarts.
+    // The token only authorises access to this user's simulated portfolio — not real financial data.
+    // Keychain would be more secure for apps handling sensitive data.
+    private static let tokenKey = "session.token"
+    private(set) var sessionToken: UUID?
+
     init(url: String, anonKey: String) {
-        base        = url
+        base         = url
         self.anonKey = anonKey
+
+        // Restore session token from previous launch
+        if let raw  = UserDefaults.standard.string(forKey: Self.tokenKey),
+           let uuid = UUID(uuidString: raw) {
+            sessionToken = uuid
+        }
 
         let enc = JSONEncoder()
         enc.dateEncodingStrategy = .iso8601
@@ -59,12 +74,27 @@ actor AccountService {
         decoder = dec
     }
 
+    // MARK: - Session
+
+    private func storeToken(_ token: UUID) {
+        sessionToken = token
+        UserDefaults.standard.set(token.uuidString, forKey: Self.tokenKey)
+    }
+
+    func clearSession() {
+        sessionToken = nil
+        UserDefaults.standard.removeObject(forKey: Self.tokenKey)
+    }
+
     // MARK: - Auth
 
     func login(username: String, password: String) async throws -> UserAccount {
         do {
-            let rows: [UserAccount] = try await rpc("login_account", body: ["p_username": username, "p_password": password])
+            let rows: [UserAccount] = try await rpc("login_account",
+                                                    body: ["p_username": username,
+                                                           "p_password": password])
             guard let account = rows.first else { throw AccountError.wrongPassword }
+            if let token = account.sessionToken { storeToken(token) }
             return account
         } catch AccountError.rpcError(let msg) {
             switch msg {
@@ -76,17 +106,27 @@ actor AccountService {
     }
 
     // Re-fetches account data for a user who already authenticated in a prior session.
-    // No password check — the stored username is the trust anchor.
+    // Requires a valid session token from the previous login.
     func fetchAccount(username: String) async throws -> UserAccount {
-        let rows: [UserAccount] = try await fetch("accounts?username=eq.\(pct(username))&select=*")
+        guard let token = sessionToken else { throw AccountError.unauthorized }
+        struct Body: Encodable {
+            let p_username:      String
+            let p_session_token: String
+        }
+        let rows: [UserAccount] = try await rpc("fetch_account",
+                                                body: Body(p_username:      username,
+                                                           p_session_token: token.uuidString))
         guard let account = rows.first else { throw AccountError.notFound }
         return account
     }
 
     func createAccount(username: String, password: String) async throws -> UserAccount {
         do {
-            let rows: [UserAccount] = try await rpc("create_account", body: ["p_username": username, "p_password": password])
+            let rows: [UserAccount] = try await rpc("create_account",
+                                                    body: ["p_username": username,
+                                                           "p_password": password])
             guard let created = rows.first else { throw AccountError.decodingFailed }
+            if let token = created.sessionToken { storeToken(token) }
             return created
         } catch AccountError.rpcError(let msg) where msg == "username_taken" {
             throw AccountError.usernameTaken
@@ -96,43 +136,84 @@ actor AccountService {
     // MARK: - Persistence
 
     func save(_ account: UserAccount) async throws {
-        guard let url = URL(string: "\(base)/rest/v1/accounts?username=eq.\(pct(account.username))") else {
-            throw AccountError.badURL
+        guard let token = sessionToken else { throw AccountError.unauthorized }
+        struct Body: Encodable {
+            let p_session_token:          String
+            let p_keycode_hash:           String
+            let p_cash_balance:           Double
+            let p_starting_balance:       Double
+            let p_shares_owned_json:      String
+            let p_purchase_prices_json:   String
+            let p_net_worth_history_json: String
+            let p_last_snapshot_at:       Date
+            let p_daily_challenge_json:   String
+            let p_achievements_json:      String
+            let p_settings_json:          String
         }
-        var req = baseRequest(url, method: "PATCH")
-        req.httpBody = try encoder.encode(account)
-        let (_, resp) = try await session.data(for: req)
-        try checkStatus(resp)
+        try await rpcVoid("save_account", body: Body(
+            p_session_token:          token.uuidString,
+            p_keycode_hash:           account.keycodeHash,
+            p_cash_balance:           account.cashBalance,
+            p_starting_balance:       account.startingBalance,
+            p_shares_owned_json:      account.sharesOwnedJSON,
+            p_purchase_prices_json:   account.purchasePricesJSON,
+            p_net_worth_history_json: account.netWorthHistoryJSON,
+            p_last_snapshot_at:       account.lastSnapshotDate,
+            p_daily_challenge_json:   account.dailyChallengeJSON,
+            p_achievements_json:      account.achievementsJSON,
+            p_settings_json:          account.settingsJSON
+        ))
     }
 
     func delete(username: String) async throws {
-        guard let url = URL(string: "\(base)/rest/v1/accounts?username=eq.\(pct(username))") else {
-            throw AccountError.badURL
-        }
-        let (_, resp) = try await session.data(for: baseRequest(url, method: "DELETE"))
-        try checkStatus(resp)
+        guard let token = sessionToken else { throw AccountError.unauthorized }
+        struct Body: Encodable { let p_session_token: String }
+        try await rpcVoid("delete_account", body: Body(p_session_token: token.uuidString))
+        clearSession()
     }
 
     // MARK: - Password Recovery
 
-    // Finds the account with a matching keycode_hash column (indexed — no full table scan).
-    // Accepts the already-hashed value — raw keycodes must never be passed here.
-    func findByKeycode(_ hash: String) async throws -> UserAccount? {
+    // Returns only the username for a matching keycode — no account data, no password hash.
+    func findUsernameByKeycode(_ hash: String) async throws -> String? {
         guard !hash.isEmpty else { return nil }
-        let rows: [UserAccount] = try await fetch("accounts?keycode_hash=eq.\(pct(hash))&select=*")
-        return rows.first
+        struct Row: Decodable { let username: String }
+        let rows: [Row] = try await rpc("find_username_by_keycode",
+                                        body: ["p_keycode_hash": hash])
+        return rows.first?.username
     }
 
     func isKeycodeTaken(_ hash: String) async throws -> Bool {
-        try await findByKeycode(hash) != nil
+        try await findUsernameByKeycode(hash) != nil
     }
 
-    // MARK: - Helpers
+    // Atomically resets the password and invalidates all sessions for that account.
+    // The keycode hash is the credential for this operation (user is locked out of their session).
+    func resetPassword(keycodeHash: String, newPasswordHash: String) async throws -> String {
+        struct Body: Encodable {
+            let p_keycode_hash:      String
+            let p_new_password_hash: String
+        }
+        struct Row: Decodable { let username: String }
+        do {
+            let rows: [Row] = try await rpc("reset_password",
+                                            body: Body(p_keycode_hash:      keycodeHash,
+                                                       p_new_password_hash: newPasswordHash))
+            guard let row = rows.first else { throw AccountError.notFound }
+            return row.username
+        } catch AccountError.rpcError(let msg) where msg == "not_found" {
+            throw AccountError.notFound
+        }
+    }
 
-    private func rpc<T: Decodable>(_ name: String, body: [String: String]) async throws -> T {
-        guard let url = URL(string: "\(base)/rest/v1/rpc/\(name)") else { throw AccountError.badURL }
+    // MARK: - RPC Helpers
+
+    private func rpc<T: Decodable, B: Encodable>(_ name: String, body: B) async throws -> T {
+        guard let url = URL(string: "\(base)/rest/v1/rpc/\(name)") else {
+            throw AccountError.badURL
+        }
         var req = baseRequest(url, method: "POST")
-        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        req.httpBody = try encoder.encode(body)
         let (data, resp) = try await session.data(for: req)
         if let http = resp as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             if let errBody = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -141,28 +222,27 @@ actor AccountService {
             }
             throw AccountError.network(http.statusCode)
         }
-        guard let result = try? decoder.decode(T.self, from: data) else { throw AccountError.decodingFailed }
+        guard let result = try? decoder.decode(T.self, from: data) else {
+            throw AccountError.decodingFailed
+        }
         return result
     }
 
-    private func fetch<T: Decodable>(_ path: String) async throws -> T {
-        guard let url = URL(string: "\(base)/rest/v1/\(path)") else { throw AccountError.badURL }
-        let (data, resp) = try await session.data(for: baseRequest(url, method: "GET"))
-        try checkStatus(resp)
-        guard let result = try? decoder.decode(T.self, from: data) else { throw AccountError.decodingFailed }
-        return result
-    }
-
-    private func insert(_ account: UserAccount) async throws -> UserAccount {
-        guard let url = URL(string: "\(base)/rest/v1/accounts") else { throw AccountError.badURL }
+    private func rpcVoid<B: Encodable>(_ name: String, body: B) async throws {
+        guard let url = URL(string: "\(base)/rest/v1/rpc/\(name)") else {
+            throw AccountError.badURL
+        }
         var req = baseRequest(url, method: "POST")
-        req.setValue("return=representation", forHTTPHeaderField: "Prefer")
-        req.httpBody = try encoder.encode(account)
+        req.httpBody = try encoder.encode(body)
         let (data, resp) = try await session.data(for: req)
-        try checkStatus(resp)
-        let rows = try decoder.decode([UserAccount].self, from: data)
-        guard let created = rows.first else { throw AccountError.decodingFailed }
-        return created
+        guard let http = resp as? HTTPURLResponse else { return }
+        if !(200..<300).contains(http.statusCode) {
+            if let errBody = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let msg = errBody["message"] as? String {
+                throw AccountError.rpcError(msg)
+            }
+            throw AccountError.network(http.statusCode)
+        }
     }
 
     private func baseRequest(_ url: URL, method: String) -> URLRequest {
@@ -173,16 +253,5 @@ actor AccountService {
         req.setValue("application/json", forHTTPHeaderField: "Accept")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         return req
-    }
-
-    private func checkStatus(_ response: URLResponse) throws {
-        guard let http = response as? HTTPURLResponse,
-              (200..<300).contains(http.statusCode) else {
-            throw AccountError.network((response as? HTTPURLResponse)?.statusCode ?? 0)
-        }
-    }
-
-    private func pct(_ s: String) -> String {
-        s.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? s
     }
 }

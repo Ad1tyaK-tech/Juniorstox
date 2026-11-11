@@ -20,27 +20,13 @@ struct StockService {
 
     // MARK: - Public API
 
-    // Generates a fresh set of prices with a new amplifier roll on every open/refresh
-    // and writes them to Supabase immediately, so every other user sees the update
-    // on their next pull-to-refresh or app open.
+    // Generates a fresh set of prices with a new amplifier roll on every open/refresh.
+    // Market price sync to Supabase is handled server-side by the GitHub Action using
+    // the service role key — the iOS app no longer writes to market_prices directly.
+    // The marketService parameter is kept for API compatibility with the call site in AppState.
     func fetchAllStocks(using marketService: MarketService) async -> [Stock] {
-        let today   = Self.todayString()
-        let stocks  = stockAliases.map { syntheticStock(for: $0, dateString: today) }
-        let newRows = stocks.map { stock in
-            MarketPriceRow(
-                ticker:        stock.realTicker,
-                price:         stock.price,
-                changePercent: stock.changePercent,
-                trend:         stock.trend,
-                slopeRate:     stock.slopeRate,
-                maxima:        stock.maxima,
-                minima:        stock.minima,
-                floor:         stock.floor,
-                updatedAt:     .now
-            )
-        }
-        await marketService.upsertMarketPrices(newRows)
-        return stocks
+        let today  = Self.todayString()
+        return stockAliases.map { syntheticStock(for: $0, dateString: today) }
     }
 
     // Returns a 90-day PriceAnalysis for a ticker.

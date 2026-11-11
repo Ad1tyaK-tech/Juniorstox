@@ -46,6 +46,8 @@ extension AppState {
     /// Reset all state and return to the welcome screen.
     func logout() {
         UserDefaults.standard.removeObject(forKey: "session.username")
+        UserDefaults.standard.removeObject(forKey: "session.token")
+        Task { await accountService.clearSession() }
         saveToAccount()
         currentAccount = nil
         fullName = ""

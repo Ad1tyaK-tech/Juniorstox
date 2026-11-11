@@ -77,7 +77,7 @@ struct ForgotPasswordView: View {
     @State private var newPassword = ""
     @State private var confirmPassword = ""
     @State private var errorMessage: String? = nil
-    @State private var foundAccount: UserAccount? = nil
+    @State private var foundUsername: String? = nil
     @State private var didReset = false
     @State private var isLoading = false
 
@@ -112,8 +112,8 @@ struct ForgotPasswordView: View {
 
                 if didReset {
                     successView
-                } else if let account = foundAccount {
-                    resetView(for: account)
+                } else if let username = foundUsername {
+                    resetView(username: username)
                 } else {
                     emailEntryView
                 }
@@ -224,7 +224,7 @@ struct ForgotPasswordView: View {
 
     // MARK: - Phase 2: Reset Password
 
-    private func resetView(for account: UserAccount) -> some View {
+    private func resetView(username: String) -> some View {
         VStack(spacing: 25) {
             Image(systemName: "lock.rotation")
                 .font(.system(size: 48))
@@ -234,7 +234,7 @@ struct ForgotPasswordView: View {
                 .font(.largeTitle.bold())
                 .foregroundColor(AppColors.textPrimary)
 
-            Text("Account found: \(account.username)")
+            Text("Account found: \(username)")
                 .font(.subheadline)
                 .foregroundColor(AppColors.textSecondary)
 
@@ -278,7 +278,7 @@ struct ForgotPasswordView: View {
             }
 
             Button {
-                saveNewPassword(for: account)
+                saveNewPassword(keycodeHash: UserAccount.hash(email))
             } label: {
                 Group {
                     if isLoading {
@@ -340,9 +340,9 @@ struct ForgotPasswordView: View {
         errorMessage = nil
         Task {
             do {
-                if let match = try await appState.accountService.findByKeycode(UserAccount.hash(trimmed)) {
+                if let username = try await appState.accountService.findUsernameByKeycode(UserAccount.hash(trimmed)) {
                     limiter.reset()
-                    foundAccount = match
+                    foundUsername = username
                 } else {
                     limiter.recordFailure()
                     startCountdown()
@@ -367,14 +367,15 @@ struct ForgotPasswordView: View {
         }
     }
 
-    private func saveNewPassword(for account: UserAccount) {
+    private func saveNewPassword(keycodeHash: String) {
         guard canReset else { return }
         isLoading = true
-        var updated = account
-        updated.passwordHash = UserAccount.hash(newPassword)
         Task {
             do {
-                try await appState.accountService.save(updated)
+                _ = try await appState.accountService.resetPassword(
+                    keycodeHash:      keycodeHash,
+                    newPasswordHash:  UserAccount.hash(newPassword)
+                )
                 didReset = true
             } catch {
                 errorMessage = "Failed to save new password. Check your connection."

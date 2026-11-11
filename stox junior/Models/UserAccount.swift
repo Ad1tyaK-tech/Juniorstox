@@ -19,6 +19,9 @@ struct UserAccount: Codable {
     var achievementsJSON: String = "{}"
     var settingsJSON: String = "{}"
 
+    // Transient — set after login/create from the RPC response, never written back to Supabase.
+    var sessionToken: UUID? = nil
+
     enum CodingKeys: String, CodingKey {
         case username
         case passwordHash        = "password_hash"
@@ -33,6 +36,7 @@ struct UserAccount: Codable {
         case dailyChallengeJSON  = "daily_challenge_json"
         case achievementsJSON    = "achievements_json"
         case settingsJSON        = "settings_json"
+        case sessionToken        = "session_token"
     }
 
     // nonisolated so it's callable from any actor context (AccountService, etc.)
@@ -57,6 +61,7 @@ struct UserAccount: Codable {
         dailyChallengeJSON  = try c.decodeIfPresent(String.self, forKey: .dailyChallengeJSON) ?? "{}"
         achievementsJSON    = try c.decodeIfPresent(String.self, forKey: .achievementsJSON)   ?? "{}"
         settingsJSON        = try c.decodeIfPresent(String.self, forKey: .settingsJSON)       ?? "{}"
+        sessionToken        = try c.decodeIfPresent(UUID.self,   forKey: .sessionToken)
     }
 
     nonisolated func encode(to encoder: any Encoder) throws {
