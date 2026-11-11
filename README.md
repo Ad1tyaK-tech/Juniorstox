@@ -273,4 +273,4 @@ Accessed from the profile avatar button in the top bar.
 
 ---
 
-*Last updated: July 2026*
+*Last updated: November 2026*
